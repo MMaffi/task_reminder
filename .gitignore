@@ -1,0 +1,12 @@
+# JSON Files
+config.json
+
+tasks.json
+
+# Directory
+
+build
+dist
+
+#Arquivos SPEC
+*.spec
