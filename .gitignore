@@ -10,3 +10,6 @@ dist
 
 #Arquivos SPEC
 *.spec
+
+# Logs
+*.log
