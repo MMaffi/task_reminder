@@ -1068,8 +1068,8 @@ class PomodoroTimer:
 class TaskReminderApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("🚀 Task Reminder Pro - Gerenciador de Tarefas Profissional")
-        self.root.geometry("1200x800")
+        self.root.title("Task Reminder")
+        self.root.geometry("1380x920")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         # Ocultar console
@@ -1196,7 +1196,7 @@ class TaskReminderApp:
                     key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_ALL_ACCESS)
                     try:
                         winreg.DeleteValue(key, app_name)
-                        print(f"✅ Removido do registro: {key_path}\\{app_name}")
+                        # print(f"✅ Removido do registro: {key_path}\\{app_name}")
                     except WindowsError:
                         pass  # Valor não existe
                     finally:
@@ -1415,7 +1415,7 @@ class TaskReminderApp:
             winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, full_command)
             winreg.CloseKey(key)
             
-            print(f"✅ Adicionado ao registro: {key_path}\\{app_name}")
+            # print(f"✅ Adicionado ao registro: {key_path}\\{app_name}")
             
         except ImportError:
             print("AVISO: Módulo winreg não disponível")
@@ -1458,9 +1458,9 @@ class TaskReminderApp:
             )
             
             self.tray_icon = pystray.Icon(
-                "task_reminder_pro",
+                "task_reminder",
                 image,
-                "Task Reminder Pro",
+                "Task Reminder",
                 menu
             )
             
@@ -1522,7 +1522,7 @@ class TaskReminderApp:
         
         tk.Label(logo_frame, text="🚀", font=('Arial', 20), 
                 bg='#2c3e50', fg='white').pack(side=tk.LEFT)
-        tk.Label(logo_frame, text="Task Reminder Pro", font=('Segoe UI', 16, 'bold'), 
+        tk.Label(logo_frame, text="Task Reminder", font=('Segoe UI', 16, 'bold'), 
                 bg='#2c3e50', fg='white').pack(side=tk.LEFT, padx=(10, 0))
         
         # Botões rápidos
@@ -1603,74 +1603,55 @@ class TaskReminderApp:
                     font=('Segoe UI', 10)).pack(anchor=tk.W, padx=10, pady=5)
 
     def setup_tasks_tab(self):
-        """Configura aba de tarefas aprimorada"""
+        """Configura aba de tarefas simplificada (sem detalhes)"""
         tasks_frame = ttk.Frame(self.notebook)
         self.notebook.add(tasks_frame, text="📋 Tarefas")
         
-        # Frame da lista de tarefas com visualização dual
-        list_frame = ttk.Frame(tasks_frame)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Frame principal para o grid
+        main_frame = ttk.Frame(tasks_frame)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Dividir em lista e visualização detalhada
-        paned = ttk.PanedWindow(list_frame, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True)
-        
-        # Painel esquerdo - lista (AGORA MAIS LARGO)
-        left_panel = ttk.Frame(paned)
-        paned.add(left_panel, weight=8)  # AUMENTADO DE 4 PARA 8 (80% da largura)
-        
-        # Tabela de tarefas aprimorada
+        # Tabela de tarefas (ocupa toda a área)
         columns = ("Sel", "ID", "Tarefa", "Data/Hora", "Prioridade", "Categoria", "Status")
-        self.tree = ttk.Treeview(left_panel, columns=columns, show="headings", selectmode='extended')
+        self.tree = ttk.Treeview(main_frame, columns=columns, show="headings", 
+                            selectmode='extended', height=20)
         
-        # Configurar colunas com tamanhos AJUSTADOS PARA VISIBILIDADE COMPLETA
+        # Configurar colunas com larguras proporcionais
         col_configs = [
-            ("Sel", "✓", 40, tk.CENTER),
+            ("Sel", "✓", 50, tk.CENTER),
             ("ID", "ID", 60, tk.CENTER),
-            ("Tarefa", "Tarefa", 500, tk.W),  # AUMENTADO DE 400 PARA 500
+            ("Tarefa", "Tarefa", 400, tk.W),
             ("Data/Hora", "Data/Hora", 150, tk.CENTER),
-            ("Prioridade", "Prioridade", 120, tk.CENTER),  # AUMENTADO DE 100 PARA 120
-            ("Categoria", "Categoria", 140, tk.CENTER),    # AUMENTADO DE 120 PARA 140
-            ("Status", "Status", 120, tk.CENTER)           # AUMENTADO DE 100 PARA 120
+            ("Prioridade", "Prioridade", 120, tk.CENTER),
+            ("Categoria", "Categoria", 140, tk.CENTER),
+            ("Status", "Status", 100, tk.CENTER)
         ]
         
         for col_id, heading, width, anchor in col_configs:
             self.tree.heading(col_id, text=heading)
             self.tree.column(col_id, width=width, anchor=anchor, minwidth=width)
         
-        # Scrollbars HORIZONTAL E VERTICAL
-        vsb = ttk.Scrollbar(left_panel, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(left_panel, orient="horizontal", command=self.tree.xview)
+        # Scrollbars
+        vsb = ttk.Scrollbar(main_frame, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(main_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         
-        # Grid para organizar a tabela e scrollbars
+        # Layout da tabela usando grid
         self.tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
         hsb.grid(row=1, column=0, sticky=(tk.W, tk.E))
         
         # Configurar expansão
-        left_panel.columnconfigure(0, weight=1)
-        left_panel.rowconfigure(0, weight=1)
-        
-        # Painel direito - visualização detalhada (AGORA MAIS ESTREITO)
-        right_panel = ttk.Frame(paned)
-        paned.add(right_panel, weight=2)  # DIMINUÍDO DE 1 PARA 2 (20% da largura)
-        
-        self.detail_frame = ttk.LabelFrame(right_panel, text="Detalhes da Tarefa", padding="10")
-        self.detail_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Inicializar detalhes vazios (mais estreito)
-        self.detail_text = tk.Text(self.detail_frame, wrap=tk.WORD, height=15, 
-                                font=('Segoe UI', 9), state='disabled', width=30)  # width=30 para mais estreito
-        self.detail_text.pack(fill=tk.BOTH, expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
         
         # Frame de entrada de nova tarefa
-        input_frame = ttk.LabelFrame(tasks_frame, text="Nova Tarefa Detalhada", padding="15")
+        input_frame = ttk.LabelFrame(tasks_frame, text="➕ Nova Tarefa", padding="15")
         input_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
         
         self.setup_detailed_task_input(input_frame)
         
-        # Botões de ação em massa
+        # Frame para botões de ação em massa
         action_frame = ttk.Frame(tasks_frame)
         action_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
         
@@ -1678,19 +1659,21 @@ class TaskReminderApp:
         center_frame = ttk.Frame(action_frame)
         center_frame.pack(expand=True)
         
-        ttk.Button(center_frame, text="✅ Concluir Selecionadas",
-                command=self.mark_selected_completed).pack(side=tk.LEFT, padx=5)
-        ttk.Button(center_frame, text="🗑️ Excluir Selecionadas",
-                command=self.delete_selected_tasks).pack(side=tk.LEFT, padx=5)
-        ttk.Button(center_frame, text="📤 Exportar Selecionadas",
-                command=self.export_selected_tasks).pack(side=tk.LEFT, padx=5)
-        ttk.Button(center_frame, text="✏️ Editar Selecionada",
-                command=self.edit_selected_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(center_frame, text="🔄 Atualizar",
-                command=self.load_tasks_to_table).pack(side=tk.LEFT, padx=5)
+        # Botões de ação em massa
+        action_buttons = [
+            ("✅ Concluir Selecionadas", self.mark_selected_completed),
+            ("🗑️ Excluir Selecionadas", self.delete_selected_tasks),
+            ("📤 Exportar Selecionadas", self.export_selected_tasks),
+            ("✏️ Editar Selecionada", self.edit_selected_task),
+            ("🔄 Atualizar", self.load_tasks_to_table)
+        ]
         
-        # Bind de seleção na tabela
-        self.tree.bind('<<TreeviewSelect>>', self.on_task_select)
+        for text, command in action_buttons:
+            ttk.Button(center_frame, text=text,
+                    command=command,
+                    width=18).pack(side=tk.LEFT, padx=3, pady=5)
+        
+        # Bind de seleção na tabela (removemos o on_task_select já que não temos mais detalhes)
         self.tree.bind('<Double-Button-1>', lambda e: self.edit_selected_task())
 
     def setup_detailed_task_input(self, parent):
@@ -2083,7 +2066,7 @@ class TaskReminderApp:
         logo_label.pack(pady=(20, 10))
         
         # Título
-        title_label = tk.Label(content, text="Task Reminder Pro", 
+        title_label = tk.Label(content, text="Task Reminder", 
                               font=('Segoe UI', 24, 'bold'), bg='#f8f9fa')
         title_label.pack(pady=(0, 10))
         
@@ -2525,38 +2508,6 @@ class TaskReminderApp:
             if task['id'] == task_id:
                 self.show_task_details(task)
                 break
-    
-    def show_task_details(self, task):
-        """Mostra detalhes da tarefa selecionada"""
-        task_date = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
-        
-        details = f"""
-📋 TAREFA DETALHADA
-{'='*40}
-
-📝 Descrição:
-{task.get('task', 'N/A')}
-
-📅 Data/Hora:
-{task_date.strftime('%d/%m/%Y %H:%M')}
-
-🎯 Prioridade: {task.get('priority', 'Normal')}
-🏷️ Categoria: {task.get('category', 'Geral')}
-📊 Status: {task.get('status', 'Pendente')}
-
-📝 Notas:
-{task.get('notes', 'Nenhuma nota')}
-
-{'='*40}
-🔄 Criada em: {task.get('created_at', 'N/A')}
-"""
-        if 'completed_at' in task:
-            details += f"✅ Concluída em: {task['completed_at']}"
-        
-        self.detail_text.config(state='normal')
-        self.detail_text.delete(1.0, tk.END)
-        self.detail_text.insert(tk.END, details)
-        self.detail_text.config(state='disabled')
     
     def add_task(self):
         """Adiciona uma nova tarefa com todos os detalhes"""
@@ -3607,10 +3558,10 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         if self.config.get("show_notification_on_minimize", True) and PLYER_AVAILABLE:
             try:
                 notification.notify(
-                    title="Task Reminder Pro",
+                    title="Task Reminder",
                     message="O aplicativo continua em execução na bandeja do sistema.",
                     timeout=3,
-                    app_name="Task Reminder Pro"
+                    app_name="Task Reminder"
                 )
             except:
                 pass
@@ -3737,33 +3688,62 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         sorted_tasks = overdue_tasks + pending_tasks + completed_tasks
         
         # Adicionar à tabela
-        for task in sorted_tasks:
+        for index, task in enumerate(sorted_tasks):
             task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
             
-            # Determinar tag para cor
+            # Determinar tag para status
             status = task.get('status', 'Pendente')
             if status == 'Concluída':
-                tag = 'completed'
+                status_tag = 'completed'
             elif status == 'Atrasada':
-                tag = 'overdue'
+                status_tag = 'overdue'
             else:
-                tag = 'pending'
+                status_tag = 'pending'
+            
+            # Determinar tag para cor alternada
+            row_tag = 'evenrow' if index % 2 == 0 else 'oddrow'
+            
+            # Tags combinadas
+            all_tags = (status_tag, row_tag)
             
             # Adicionar à tabela
             self.tree.insert("", tk.END, values=(
                 "",  # Checkbox vazio
                 task['id'],
-                task['task'],
+                task['task'][:80] + "..." if len(task['task']) > 80 else task['task'],
                 task_datetime.strftime("%d/%m/%Y %H:%M"),
                 task.get('priority', 'Normal'),
                 task.get('category', 'Geral'),
                 status
-            ), tags=(tag,))
+            ), tags=all_tags)
         
         # Configurar cores das tags
-        self.tree.tag_configure('overdue', foreground='#e74c3c', font=('Segoe UI', 9, 'bold'))
-        self.tree.tag_configure('pending', foreground='#6c757d')
-        self.tree.tag_configure('completed', foreground='#27ae60', font=('Segoe UI', 9, 'italic'))
+        self.style_tree_tags()
+        
+        # Atualizar contador
+        self.update_task_count()
+
+    def style_tree_tags(self):
+        """Estiliza as tags da árvore para melhor visualização"""
+        # Configurar estilos para diferentes status
+        self.tree.tag_configure('overdue', 
+                            background='#ffeaea', 
+                            foreground='#d63031',
+                            font=('Segoe UI', 9, 'bold'))
+        
+        self.tree.tag_configure('pending', 
+                            background='#fff9e6', 
+                            foreground='#e17055',
+                            font=('Segoe UI', 9))
+        
+        self.tree.tag_configure('completed', 
+                            background='#e8f6ef', 
+                            foreground='#27ae60',
+                            font=('Segoe UI', 9, 'italic'))
+        
+        # Alternar cores para linhas
+        self.tree.tag_configure('oddrow', background='#f8f9fa')
+        self.tree.tag_configure('evenrow', background='#ffffff')
     
     def schedule_task_notifications(self, task):
         """Agenda notificações para uma tarefa"""
@@ -3819,10 +3799,10 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         if PLYER_AVAILABLE:
             try:
                 notification.notify(
-                    title="🚨 Task Reminder Pro",
+                    title="🚨 Task Reminder",
                     message=f"⏰ HORA DA TAREFA!\n\n{task['task']}",
                     timeout=self.config.get("notification_duration", 15),
-                    app_name="Task Reminder Pro"
+                    app_name="Task Reminder"
                 )
             except:
                 pass
@@ -3846,10 +3826,10 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         if PLYER_AVAILABLE:
             try:
                 notification.notify(
-                    title="🔔 Task Reminder Pro",
+                    title="🔔 Task Reminder",
                     message=f"⏰ Lembrete ({minutes}):\n\n{task['task']}",
                     timeout=10,
-                    app_name="Task Reminder Pro"
+                    app_name="Task Reminder"
                 )
             except:
                 pass
@@ -4053,7 +4033,7 @@ def main():
     if last_error == 183:
         try:
             messagebox.showinfo(
-                "Task Reminder Pro",
+                "Task Reminder",
                 "O aplicativo já está em execução!\n"
                 "Verifique o ícone na bandeja do sistema."
             )
