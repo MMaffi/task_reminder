@@ -1152,6 +1152,63 @@ class TaskReminderApp:
         # Verificar dependências
         self.check_dependencies()
 
+    def remove_autostart(self):
+        """Remove o atalho de inicialização do Windows"""
+        if not WINSHELL_AVAILABLE:
+            print("AVISO: Biblioteca winshell não disponível - não é possível remover autostart")
+            return False
+        
+        try:
+            startup_path = winshell.startup()
+            shortcut_path = os.path.join(startup_path, "TaskReminderPro.lnk")
+            
+            if os.path.exists(shortcut_path):
+                os.remove(shortcut_path)
+                # print(f"✅ Autostart removido: {shortcut_path}")
+                
+                # Também verificar e remover do registro do Windows
+                self.remove_from_registry()
+                
+                return True
+            else:
+                print("ℹ️  Atalho de autostart não encontrado")
+                return True  # Considera como sucesso pois já não existe
+                
+        except Exception as e:
+            print(f"❌ Erro ao remover autostart: {e}")
+            return False
+
+    def remove_from_registry(self):
+        """Remove do registro do Windows também (se existir)"""
+        try:
+            import winreg
+            
+            # Chaves do registro para verificar
+            registry_keys = [
+                (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+                (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run")
+            ]
+            
+            app_name = "TaskReminderPro"
+            
+            for hive, key_path in registry_keys:
+                try:
+                    key = winreg.OpenKey(hive, key_path, 0, winreg.KEY_ALL_ACCESS)
+                    try:
+                        winreg.DeleteValue(key, app_name)
+                        print(f"✅ Removido do registro: {key_path}\\{app_name}")
+                    except WindowsError:
+                        pass  # Valor não existe
+                    finally:
+                        winreg.CloseKey(key)
+                except WindowsError:
+                    pass  # Chave não existe ou sem permissão
+                    
+        except ImportError:
+            print("AVISO: Módulo winreg não disponível")
+        except Exception as e:
+            print(f"❌ Erro ao remover do registro: {e}")
+
     def hide_console(self):
         """Oculta o console do Windows"""
         try:
@@ -1292,29 +1349,78 @@ class TaskReminderApp:
     def setup_autostart(self):
         """Configura o aplicativo para iniciar com o Windows"""
         if not WINSHELL_AVAILABLE:
-            return
-            
+            print("AVISO: Biblioteca winshell não disponível - não é possível configurar autostart")
+            return False
+        
         try:
             startup_path = winshell.startup()
             shortcut_path = os.path.join(startup_path, "TaskReminderPro.lnk")
             
+            # Se já existir, remover primeiro
+            if os.path.exists(shortcut_path):
+                try:
+                    os.remove(shortcut_path)
+                except:
+                    pass
+            
+            # Criar atalho
             target = sys.executable
             script = os.path.abspath(__file__)
             
             shell = Dispatch('WScript.Shell')
             shortcut = shell.CreateShortCut(shortcut_path)
             shortcut.Targetpath = target
+            
+            # Adicionar argumento para iniciar minimizado
             shortcut.Arguments = f'"{script}" --minimized'
             shortcut.WorkingDirectory = os.path.dirname(script)
             
             if os.path.exists(self.icon_file):
                 shortcut.IconLocation = str(self.icon_file)
             
-            shortcut.WindowStyle = 7
+            shortcut.WindowStyle = 7  # Minimizado
             shortcut.save()
             
+            # print(f"✅ Autostart configurado: {shortcut_path}")
+            
+            # Também adicionar ao registro (backup)
+            self.add_to_registry()
+            
+            return True
+            
         except Exception as e:
-            print(f"Erro ao configurar autostart: {e}")
+            print(f"❌ Erro ao configurar autostart: {e}")
+            return False
+
+    def add_to_registry(self):
+        """Adiciona ao registro do Windows também (como backup)"""
+        try:
+            import winreg
+            
+            app_name = "TaskReminderPro"
+            target = sys.executable
+            script = os.path.abspath(__file__)
+            arguments = f'"{script}" --minimized'
+            
+            # Adicionar apenas ao registro do usuário atual (não requer admin)
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            except WindowsError:
+                # Se a chave não existir, criar
+                key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+            
+            full_command = f'"{target}" {arguments}'
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, full_command)
+            winreg.CloseKey(key)
+            
+            print(f"✅ Adicionado ao registro: {key_path}\\{app_name}")
+            
+        except ImportError:
+            print("AVISO: Módulo winreg não disponível")
+        except Exception as e:
+            print(f"❌ Erro ao adicionar ao registro: {e}")
 
     def setup_global_hotkey(self):
         """Configura hotkey global para abrir tarefa rápida"""
@@ -3827,6 +3933,16 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
             'notification_duration': self.notification_duration_var.get() if hasattr(self, 'notification_duration_var') else 15,
             'notification_type': self.notification_type_var.get() if hasattr(self, 'notification_type_var') else 'ambos'
         }
+
+        old_start_with_windows = self.config.get("start_with_windows", True)
+        new_start_with_windows = config_updates['start_with_windows']
+
+        # Gerenciar autostart se a configuração mudou
+        if old_start_with_windows != new_start_with_windows:
+            if new_start_with_windows:
+                self.setup_autostart()
+            else:
+                self.remove_autostart()
         
         self.config.update(config_updates)
         
@@ -3837,14 +3953,20 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         else:
             if not self.is_quitting:
                 messagebox.showerror("Erro", "Erro ao salvar configurações.")
+        
+        self.config.update(config_updates)
     
     def restore_default_settings(self):
         """Restaura configurações padrão"""
         if messagebox.askyesno("Confirmar", 
                               "Restaurar todas as configurações para os valores padrão?\n\n"
                               "Esta ação não pode ser desfeita."):
+            
+            if self.config.get("start_with_windows", True):
+                self.remove_autostart()
+
             default_config = {
-                "start_with_windows": True,
+                "start_with_windows": False,
                 "minimize_to_tray": True,
                 "show_tray_icon": True,
                 "enable_global_hotkey": True,
