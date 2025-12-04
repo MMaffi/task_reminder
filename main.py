@@ -154,6 +154,8 @@ class TaskReminderApp:
         self.editing_task_id = None
         self.notification_windows = []
         self.is_quitting = False  # Flag para controlar se está saindo
+        self.add_button = None  # Botão de adicionar tarefa
+        self.update_button = None  # Botão de atualizar tarefa
         
         # Configurar cores
         self.setup_colors()
@@ -513,25 +515,52 @@ class TaskReminderApp:
         reminders_frame = ttk.Frame(input_frame)
         reminders_frame.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         
+        # Variáveis para os checkboxes de lembretes
         self.reminder_5min = tk.BooleanVar()
         self.reminder_10min = tk.BooleanVar()
+        self.reminder_30min = tk.BooleanVar()
+        self.reminder_1h = tk.BooleanVar()
         
+        # Grid para os checkboxes (2 linhas, 2 colunas)
         ttk.Checkbutton(reminders_frame, text="5 min antes", 
-                       variable=self.reminder_5min).grid(row=0, column=0, padx=(0, 10))
+                       variable=self.reminder_5min).grid(row=0, column=0, padx=(0, 10), sticky=tk.W)
         ttk.Checkbutton(reminders_frame, text="10 min antes", 
-                       variable=self.reminder_10min).grid(row=0, column=1)
+                       variable=self.reminder_10min).grid(row=0, column=1, sticky=tk.W)
+        ttk.Checkbutton(reminders_frame, text="30 min antes", 
+                       variable=self.reminder_30min).grid(row=1, column=0, padx=(0, 10), sticky=tk.W)
+        ttk.Checkbutton(reminders_frame, text="1 hora antes", 
+                       variable=self.reminder_1h).grid(row=1, column=1, sticky=tk.W)
         
-        # Botão de adicionar
+        # Frame para botões (Adicionar/Atualizar/Cancelar)
         button_frame = ttk.Frame(input_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=(15, 0))
         
-        ttk.Button(
+        # Botão de adicionar tarefa (visível por padrão)
+        self.add_button = ttk.Button(
             button_frame, 
             text="➕ Adicionar Tarefa", 
             command=self.add_task,
             style='Accent.TButton',
             width=20
-        ).grid(row=0, column=0, padx=2)
+        )
+        self.add_button.grid(row=0, column=0, padx=2)
+        
+        # Botão de atualizar tarefa (inicialmente escondido)
+        self.update_button = ttk.Button(
+            button_frame, 
+            text="✅ Atualizar Tarefa", 
+            command=self.update_task,
+            style='Accent.TButton',
+            width=20
+        )
+        
+        # Botão de cancelar edição (inicialmente escondido)
+        self.cancel_button = ttk.Button(
+            button_frame, 
+            text="❌ Cancelar Edição", 
+            command=self.cancel_edit,
+            width=20
+        )
         
         # Frame da lista de tarefas
         list_frame = ttk.LabelFrame(tasks_frame, text="Tarefas Agendadas", padding="10")
@@ -553,7 +582,7 @@ class TaskReminderApp:
         self.tree.column("ID", width=50, anchor=tk.CENTER, minwidth=40)
         self.tree.column("Tarefa", width=400, anchor=tk.W, minwidth=200)
         self.tree.column("Data/Hora", width=120, anchor=tk.CENTER, minwidth=100)
-        self.tree.column("Lembretes", width=100, anchor=tk.CENTER, minwidth=80)
+        self.tree.column("Lembretes", width=150, anchor=tk.CENTER, minwidth=120)  # Aumentei a largura
         self.tree.column("Status", width=100, anchor=tk.CENTER, minwidth=80)
         
         # Scrollbars
@@ -784,6 +813,21 @@ class TaskReminderApp:
         if selected:
             pass
 
+    def toggle_edit_buttons(self, editing=True):
+        """Alterna entre os botões Adicionar/Atualizar/Cancelar"""
+        if editing:
+            # Esconder botão de adicionar
+            self.add_button.grid_remove()
+            # Mostrar botões de atualizar e cancelar
+            self.update_button.grid(row=0, column=0, padx=2)
+            self.cancel_button.grid(row=0, column=1, padx=2)
+        else:
+            # Esconder botões de atualizar e cancelar
+            self.update_button.grid_remove()
+            self.cancel_button.grid_remove()
+            # Mostrar botão de adicionar
+            self.add_button.grid(row=0, column=0, padx=2)
+
     def add_task(self):
         """Adiciona uma nova tarefa"""
         task_text = self.task_entry.get().strip()
@@ -808,14 +852,10 @@ class TaskReminderApp:
         
         # Verificar se está editando
         if self.editing_task_id:
-            # Atualizar tarefa existente
-            self.update_existing_task(task_text, date_text, time_text)
-        else:
-            # Adicionar nova tarefa
-            self.add_new_task(task_text, date_text, time_text)
-
-    def add_new_task(self, task_text, date_text, time_text):
-        """Adiciona uma nova tarefa"""
+            self.update_task()
+            return
+        
+        # Adicionar nova tarefa
         task_datetime = datetime.strptime(f"{date_text} {time_text}", "%d/%m/%Y %H:%M")
         now = datetime.now()
         
@@ -825,6 +865,8 @@ class TaskReminderApp:
             "datetime": task_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "reminder_5min": self.reminder_5min.get(),
             "reminder_10min": self.reminder_10min.get(),
+            "reminder_30min": self.reminder_30min.get(),
+            "reminder_1h": self.reminder_1h.get(),
             "status": "Pendente",
             "created_at": now.strftime("%Y-%m-%d %H:%M:%S"),
             "is_overdue": task_datetime < now
@@ -852,6 +894,8 @@ class TaskReminderApp:
         # Resetar lembretes
         self.reminder_5min.set(False)
         self.reminder_10min.set(False)
+        self.reminder_30min.set(False)
+        self.reminder_1h.set(False)
         
         # Atualizar status
         self.status_var.set(f"✅ Tarefa '{task_text[:30]}...' adicionada")
@@ -859,8 +903,32 @@ class TaskReminderApp:
         # Voltar o foco para a descrição
         self.task_entry.focus()
 
-    def update_existing_task(self, task_text, date_text, time_text):
+    def update_task(self):
         """Atualiza uma tarefa existente"""
+        task_text = self.task_entry.get().strip()
+        date_text = self.date_entry.get().strip()
+        time_text = self.time_entry.get().strip()
+        
+        # Validação
+        if not task_text:
+            messagebox.showwarning("Aviso", "Por favor, insira uma descrição para a tarefa!")
+            self.task_entry.focus()
+            return
+        
+        if not self.validate_datetime(date_text, time_text):
+            messagebox.showerror(
+                "Erro", 
+                "Formato de data/hora inválido!\n\n"
+                "Use: DD/MM/AAAA HH:MM\n"
+                "Exemplo: 25/12/2024 14:30"
+            )
+            self.date_entry.focus()
+            return
+        
+        if not self.editing_task_id:
+            messagebox.showwarning("Aviso", "Nenhuma tarefa está sendo editada!")
+            return
+        
         task_datetime = datetime.strptime(f"{date_text} {time_text}", "%d/%m/%Y %H:%M")
         now = datetime.now()
         
@@ -871,6 +939,8 @@ class TaskReminderApp:
                 task['datetime'] = task_datetime.strftime("%Y-%m-%d %H:%M:%S")
                 task['reminder_5min'] = self.reminder_5min.get()
                 task['reminder_10min'] = self.reminder_10min.get()
+                task['reminder_30min'] = self.reminder_30min.get()
+                task['reminder_1h'] = self.reminder_1h.get()
                 task['status'] = "Pendente"
                 task['is_overdue'] = task_datetime < now
                 
@@ -886,12 +956,34 @@ class TaskReminderApp:
                 self.task_entry.delete(0, tk.END)
                 self.reminder_5min.set(False)
                 self.reminder_10min.set(False)
+                self.reminder_30min.set(False)
+                self.reminder_1h.set(False)
                 
-                # Resetar edição
+                # Resetar edição e voltar para modo adicionar
                 self.editing_task_id = None
+                self.toggle_edit_buttons(editing=False)
                 
-                self.status_var.set(f"✏️ Tarefa atualizada")
+                self.status_var.set(f"✏️ Tarefa atualizada com sucesso")
                 break
+
+    def cancel_edit(self):
+        """Cancela a edição atual e volta para o modo adicionar"""
+        self.editing_task_id = None
+        self.toggle_edit_buttons(editing=False)
+        
+        # Limpar campos
+        self.task_entry.delete(0, tk.END)
+        next_hour = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
+        self.time_entry.delete(0, tk.END)
+        self.time_entry.insert(0, next_hour)
+        
+        # Resetar lembretes
+        self.reminder_5min.set(False)
+        self.reminder_10min.set(False)
+        self.reminder_30min.set(False)
+        self.reminder_1h.set(False)
+        
+        self.status_var.set("Edição cancelada")
 
     def edit_selected_task(self):
         """Carrega a tarefa selecionada para edição"""
@@ -918,13 +1010,16 @@ class TaskReminderApp:
                 self.time_entry.insert(0, task_datetime.strftime("%H:%M"))
                 
                 # Carregar lembretes
-                self.reminder_5min.set(task['reminder_5min'])
-                self.reminder_10min.set(task['reminder_10min'])
+                self.reminder_5min.set(task.get('reminder_5min', False))
+                self.reminder_10min.set(task.get('reminder_10min', False))
+                self.reminder_30min.set(task.get('reminder_30min', False))
+                self.reminder_1h.set(task.get('reminder_1h', False))
                 
-                # Marcar que está editando
+                # Marcar que está editando e alternar botões
                 self.editing_task_id = task_id
+                self.toggle_edit_buttons(editing=True)
                 
-                self.status_var.set(f"✏️ Editando tarefa ID {task_id} - Clique em 'Adicionar Tarefa' para atualizar")
+                self.status_var.set(f"✏️ Editando tarefa ID {task_id} - Clique em 'Atualizar Tarefa' para confirmar")
                 self.task_entry.focus()
                 break
 
@@ -960,7 +1055,10 @@ class TaskReminderApp:
                 self.task_entry.delete(0, tk.END)
                 self.reminder_5min.set(False)
                 self.reminder_10min.set(False)
+                self.reminder_30min.set(False)
+                self.reminder_1h.set(False)
                 self.editing_task_id = None
+                self.toggle_edit_buttons(editing=False)
             
             self.status_var.set(f"🗑️ Tarefa excluída")
 
@@ -1036,6 +1134,10 @@ class TaskReminderApp:
                 reminders.append("5min")
             if task.get('reminder_10min'):
                 reminders.append("10min")
+            if task.get('reminder_30min'):
+                reminders.append("30min")
+            if task.get('reminder_1h'):
+                reminders.append("1h")
             reminders_text = ", ".join(reminders) if reminders else "Nenhum"
             
             # Verificar se a tarefa está atrasada
@@ -1095,6 +1197,11 @@ class TaskReminderApp:
                         if 'is_overdue' not in task:
                             task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
                             task['is_overdue'] = task_datetime < datetime.now()
+                        # Garantir que os novos campos de lembrete existam
+                        if 'reminder_30min' not in task:
+                            task['reminder_30min'] = False
+                        if 'reminder_1h' not in task:
+                            task['reminder_1h'] = False
                     
                     return tasks
             except Exception as e:
@@ -1144,6 +1251,28 @@ class TaskReminderApp:
                             task['task'],
                             "10 minutos"
                         ).tag(f"reminder_10min_{task['id']}")
+                
+                # Notificação 30 minutos antes
+                if task.get('reminder_30min'):
+                    reminder_time = task_time - timedelta(minutes=30)
+                    if reminder_time > now:
+                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
+                            self.send_reminder_notification,
+                            task['id'],
+                            task['task'],
+                            "30 minutos"
+                        ).tag(f"reminder_30min_{task['id']}")
+                
+                # Notificação 1 hora antes
+                if task.get('reminder_1h'):
+                    reminder_time = task_time - timedelta(hours=1)
+                    if reminder_time > now:
+                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
+                            self.send_reminder_notification,
+                            task['id'],
+                            task['task'],
+                            "1 hora"
+                        ).tag(f"reminder_1h_{task['id']}")
                         
         except Exception as e:
             print(f"Erro ao agendar notificações: {e}")
