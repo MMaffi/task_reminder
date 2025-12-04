@@ -240,6 +240,9 @@ class NotificationWindow:
                         # Atualizar interface
                         self.parent_app.root.after(0, self.parent_app.load_tasks_to_table)
                         self.parent_app.root.after(0, self.parent_app.update_task_count)
+
+                        # Atualizar estatísticas da sidebar
+                        self.parent_app.update_sidebar_stats()
                         
                         break
             except Exception as e:
@@ -272,6 +275,9 @@ class NotificationWindow:
                     # Atualizar interface
                     self.parent_app.root.after(0, self.parent_app.load_tasks_to_table)
                     self.parent_app.root.after(0, self.parent_app.update_task_count)
+
+                    # Atualizar estatísticas da sidebar
+                    self.parent_app.update_sidebar_stats()
                     
                     # Status do aplicativo
                     self.parent_app.status_var.set(f"✅ Tarefa '{self.task_data.get('task', '')[:30]}...' concluída")
@@ -761,6 +767,10 @@ class QuickTaskWindow:
                 self.task_entry.delete(0, tk.END)
                 self.set_current_time()  # Reset para hora atual
                 self.task_entry.focus()
+
+                # Atualizar estatísticas da sidebar
+                self.update_sidebar_stats()
+
             except ValueError:
                 messagebox.showerror("Erro", "Formato de data/hora inválido!\nUse: DD/MM/AAAA HH:MM")
     
@@ -1574,33 +1584,64 @@ class TaskReminderApp:
                 tk.Frame(nav_frame, bg='#34495e', height=2).pack(fill=tk.X, pady=10)
             else:
                 btn = tk.Button(nav_frame, text=text, 
-                              bg='#2c3e50', fg='#ecf0f1', font=('Segoe UI', 11),
-                              anchor=tk.W, padx=15, pady=8, command=command,
-                              cursor='hand2', relief=tk.FLAT)
+                            bg='#2c3e50', fg='#ecf0f1', font=('Segoe UI', 11),
+                            anchor=tk.W, padx=15, pady=8, command=command,
+                            cursor='hand2', relief=tk.FLAT)
                 btn.pack(fill=tk.X, pady=2)
                 btn.bind('<Enter>', lambda e, b=btn: b.configure(bg='#34495e'))
                 btn.bind('<Leave>', lambda e, b=btn: b.configure(bg='#2c3e50'))
         
-        # Estatísticas rápidas
-        stats_frame = tk.Frame(sidebar, bg='#34495e')
-        stats_frame.pack(fill=tk.X, padx=10, pady=20)
+        # Estatísticas rápidas (Frame para atualizar dinamicamente)
+        self.stats_frame = tk.Frame(sidebar, bg='#34495e')
+        self.stats_frame.pack(fill=tk.X, padx=10, pady=20)
         
-        tk.Label(stats_frame, text="📈 Estatísticas Rápidas", 
+        # Inicializar estatísticas
+        self.update_sidebar_stats()
+
+    def update_sidebar_stats(self):
+        """Atualiza as estatísticas rápidas na sidebar"""
+        # Limpar estatísticas antigas
+        for widget in self.stats_frame.winfo_children():
+            widget.destroy()
+        
+        tk.Label(self.stats_frame, text="📈 Estatísticas Rápidas", 
                 bg='#34495e', fg='white', font=('Segoe UI', 12, 'bold')).pack(pady=(10, 15))
         
-        today_tasks = len([t for t in self.tasks if 
-                          datetime.strptime(t.get('datetime'), "%Y-%m-%d %H:%M:%S").date() == datetime.now().date()])
+        # Contar tarefas por status
+        completed = len([t for t in self.tasks if t.get('status') == 'Concluída'])
+        pending = len([t for t in self.tasks if t.get('status') == 'Pendente'])
+        overdue = len([t for t in self.tasks if t.get('status') == 'Atrasada'])
+        total = len(self.tasks)
+        
+        # Calcular tarefas de hoje (baseado na data do campo datetime)
+        today = datetime.now().date()
+        today_tasks = 0
+        for task in self.tasks:
+            try:
+                task_date = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S").date()
+                if task_date == today:
+                    today_tasks += 1
+            except (ValueError, KeyError):
+                continue
+        
+        # Calcular taxa de conclusão
+        completion_rate = (completed / total * 100) if total > 0 else 0
         
         stats = [
             (f"📅 Hoje: {today_tasks}", '#3498db'),
-            (f"⏳ Pendentes: {len([t for t in self.tasks if t.get('status') == 'Pendente'])}", '#f39c12'),
-            (f"⚠️ Atrasadas: {len([t for t in self.tasks if t.get('status') == 'Atrasada'])}", '#e74c3c'),
-            (f"✅ Concluídas: {len([t for t in self.tasks if t.get('status') == 'Concluída'])}", '#27ae60')
+            (f"📋 Total: {total}", '#95a5a6'),
+            (f"⏳ Pendentes: {pending}", '#f39c12'),
+            (f"⚠️ Atrasadas: {overdue}", '#e74c3c'),
+            (f"✅ Concluídas: {completed}", '#27ae60'),
+            (f"📊 Conclusão: {completion_rate:.1f}%", '#9b59b6')
         ]
         
         for text, color in stats:
-            tk.Label(stats_frame, text=text, bg='#34495e', fg=color,
-                    font=('Segoe UI', 10)).pack(anchor=tk.W, padx=10, pady=5)
+            frame = tk.Frame(self.stats_frame, bg='#34495e')
+            frame.pack(fill=tk.X, pady=3)
+            
+            tk.Label(frame, text=text, bg='#34495e', fg=color,
+                    font=('Segoe UI', 10), anchor=tk.W).pack(side=tk.LEFT, padx=10, pady=2)
 
     def setup_tasks_tab(self):
         """Configura aba de tarefas simplificada (sem detalhes)"""
@@ -2155,7 +2196,12 @@ class TaskReminderApp:
         """Atualiza o contador de tarefas na barra de status"""
         total = len(self.tasks)
         pending = len([t for t in self.tasks if t.get('status') == 'Pendente'])
-        self.task_count_var.set(f"📋 Total: {total} | ⏳ Pendentes: {pending}")
+        overdue = len([t for t in self.tasks if t.get('status') == 'Atrasada'])
+        today = datetime.now().date()
+        today_count = len([t for t in self.tasks 
+                        if datetime.strptime(t['datetime'], "%Y-%m-%d %H:%M:%S").date() == today])
+        
+        self.task_count_var.set(f"📋 Total: {total} | 📅 Hoje: {today_count} | ⏳ Pendentes: {pending} | ⚠️ Atrasadas: {overdue}")
 
     def draw_calendar(self):
         """Desenha o calendário na tela"""
@@ -2173,7 +2219,7 @@ class TaskReminderApp:
             canvas_height = 600
         
         cell_width = canvas_width // 7
-        cell_height = canvas_height // 8  # 1 linha para cabeçalho + 6 para dias
+        cell_height = canvas_height // 8
         
         # Desenhar cabeçalho
         days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"]
@@ -2775,6 +2821,9 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
             self.load_tasks_to_table()
             self.update_task_count()
             self.status_var.set(f"✅ {count} tarefa(s) marcada(s) como concluída(s)")
+
+        # Atualizar estatísticas da sidebar
+        self.update_sidebar_stats()
     
     def delete_selected_tasks(self):
         """Exclui tarefas selecionadas"""
@@ -2804,6 +2853,9 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
             self.reschedule_all_tasks()
         
         self.status_var.set(f"🗑️ {len(selected)} tarefa(s) excluída(s)")
+
+        # Atualizar estatísticas da sidebar
+        self.update_sidebar_stats()
     
     def export_selected_tasks(self):
         """Exporta tarefas selecionadas"""
@@ -3722,6 +3774,9 @@ Ligar para cliente;02/01/2024;10:00;Urgente"""
         
         # Atualizar contador
         self.update_task_count()
+
+        # Atualizar estatísticas da sidebar
+        self.update_sidebar_stats()
 
     def style_tree_tags(self):
         """Estiliza as tags da árvore para melhor visualização"""
