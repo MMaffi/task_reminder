@@ -700,8 +700,7 @@ class TaskReminderApp:
             ttk.Checkbutton(
                 general_frame,
                 text="Iniciar automaticamente com o Windows",
-                variable=self.start_with_windows_var,
-                command=self.toggle_autostart
+                variable=self.start_with_windows_var
             ).grid(row=row, column=0, sticky=tk.W, pady=5)
             row += 1
         
@@ -710,8 +709,7 @@ class TaskReminderApp:
         ttk.Checkbutton(
             general_frame,
             text="Minimizar para bandeja do sistema ao fechar",
-            variable=self.minimize_to_tray_var,
-            command=self.update_minimize_setting
+            variable=self.minimize_to_tray_var
         ).grid(row=row, column=0, sticky=tk.W, pady=5)
         row += 1
         
@@ -721,8 +719,7 @@ class TaskReminderApp:
             ttk.Checkbutton(
                 general_frame,
                 text="Mostrar ícone na bandeja do sistema",
-                variable=self.show_tray_icon_var,
-                command=self.update_tray_icon_setting
+                variable=self.show_tray_icon_var
             ).grid(row=row, column=0, sticky=tk.W, pady=5)
             row += 1
         
@@ -732,8 +729,7 @@ class TaskReminderApp:
             ttk.Checkbutton(
                 general_frame,
                 text="Mostrar notificação ao minimizar para bandeja",
-                variable=self.show_notification_var,
-                command=self.update_notification_setting
+                variable=self.show_notification_var
             ).grid(row=row, column=0, sticky=tk.W, pady=5)
             row += 1
         
@@ -743,8 +739,7 @@ class TaskReminderApp:
             ttk.Checkbutton(
                 general_frame,
                 text="Tocar som nas notificações",
-                variable=self.notification_sound_var,
-                command=self.update_sound_setting
+                variable=self.notification_sound_var
             ).grid(row=row, column=0, sticky=tk.W, pady=5)
             row += 1
         
@@ -762,11 +757,9 @@ class TaskReminderApp:
                 to=60,
                 increment=5,
                 textvariable=self.notification_duration_var,
-                width=10,
-                command=self.update_duration_setting
+                width=10
             )
             duration_spinbox.grid(row=0, column=0)
-            duration_spinbox.bind('<FocusOut>', lambda e: self.update_duration_setting())
             row += 1
         
         # Intervalo de verificação
@@ -782,11 +775,9 @@ class TaskReminderApp:
             to=1440,
             increment=5,
             textvariable=self.check_interval_var,
-            width=10,
-            command=self.update_interval_setting
+            width=10
         )
         interval_spinbox.grid(row=0, column=0)
-        interval_spinbox.bind('<FocusOut>', lambda e: self.update_interval_setting())
         row += 1
         
         # Tema
@@ -801,7 +792,6 @@ class TaskReminderApp:
             width=10
         )
         theme_combo.grid(row=row, column=1, sticky=tk.W, pady=5, padx=(10, 0))
-        theme_combo.bind('<<ComboboxSelected>>', self.update_theme_setting)
         row += 1
         
         # Botões de ação
@@ -813,7 +803,7 @@ class TaskReminderApp:
             text="💾 Salvar Configurações",
             command=self.save_all_settings,
             style='Accent.TButton',
-            width=20
+            width=25
         ).grid(row=0, column=0, padx=5)
         
         ttk.Button(
@@ -827,7 +817,7 @@ class TaskReminderApp:
             button_frame,
             text="🗑️ Limpar Todos os Dados",
             command=self.clear_all_data,
-            width=20
+            width=30
         ).grid(row=0, column=2, padx=5)
 
     def setup_status_bar(self):
@@ -1446,103 +1436,6 @@ class TaskReminderApp:
         scheduler_thread.start()
 
     # Métodos de configurações
-    def toggle_autostart(self):
-        """Ativa/desativa o início automático com Windows"""
-        if not WINSHELL_AVAILABLE:
-            messagebox.showwarning("Funcionalidade indisponível", 
-                                 "Instale winshell e pywin32 para usar esta funcionalidade.")
-            self.start_with_windows_var.set(False)
-            return
-            
-        if self.start_with_windows_var.get():
-            self.setup_autostart()
-        else:
-            self.remove_autostart()
-        
-        self.config['start_with_windows'] = self.start_with_windows_var.get()
-        self.save_config()
-
-    def update_minimize_setting(self):
-        """Atualiza a configuração de minimizar para bandeja"""
-        self.config['minimize_to_tray'] = self.minimize_to_tray_var.get()
-        self.save_config()
-
-    def update_tray_icon_setting(self):
-        """Atualiza a configuração do ícone na bandeja"""
-        if not PYSTRAY_AVAILABLE:
-            messagebox.showwarning("Funcionalidade indisponível", 
-                                 "Instale pystray para usar esta funcionalidade.")
-            self.show_tray_icon_var.set(False)
-            return
-            
-        self.config['show_tray_icon'] = self.show_tray_icon_var.get()
-        self.save_config()
-        
-        # Reiniciar ícone da bandeja se necessário
-        if self.tray_icon:
-            self.tray_icon.stop()
-            self.tray_icon = None
-        
-        if self.show_tray_icon_var.get():
-            self.setup_tray_icon()
-
-    def update_notification_setting(self):
-        """Atualiza a configuração de notificação ao minimizar"""
-        if not PLYER_AVAILABLE:
-            messagebox.showwarning("Funcionalidade indisponível", 
-                                 "Instale plyer para usar esta funcionalidade.")
-            self.show_notification_var.set(False)
-            return
-            
-        self.config['show_notification_on_minimize'] = self.show_notification_var.get()
-        self.save_config()
-
-    def update_sound_setting(self):
-        """Atualiza a configuração de som"""
-        if not PLYER_AVAILABLE:
-            messagebox.showwarning("Funcionalidade indisponível", 
-                                 "Instale plyer para usar esta funcionalidade.")
-            self.notification_sound_var.set(False)
-            return
-            
-        self.config['notification_sound'] = self.notification_sound_var.get()
-        self.save_config()
-
-    def update_duration_setting(self):
-        """Atualiza a duração das notificações"""
-        if not PLYER_AVAILABLE:
-            messagebox.showwarning("Funcionalidade indisponível", 
-                                 "Instale plyer para usar esta funcionalidade.")
-            return
-            
-        try:
-            duration = self.notification_duration_var.get()
-            if 5 <= duration <= 60:
-                self.config['notification_duration'] = duration
-                self.save_config()
-            else:
-                self.notification_duration_var.set(self.config.get('notification_duration', 15))
-        except:
-            pass
-
-    def update_interval_setting(self):
-        """Atualiza o intervalo de verificação"""
-        try:
-            interval = self.check_interval_var.get()
-            if 1 <= interval <= 1440:
-                self.config['check_interval'] = interval
-                self.save_config()
-            else:
-                self.check_interval_var.set(self.config.get('check_interval', 60))
-        except:
-            pass
-
-    def update_theme_setting(self, event=None):
-        """Atualiza o tema"""
-        self.config['theme'] = self.theme_var.get()
-        self.save_config()
-        messagebox.showinfo("Tema", "O tema será aplicado na próxima inicialização do aplicativo.")
-
     def save_all_settings(self):
         """Salva todas as configurações (não mostra mensagem se estiver saindo)"""
         # Atualizar config com valores atuais
@@ -1555,14 +1448,50 @@ class TaskReminderApp:
         # Adicionar apenas se as variáveis existirem
         if hasattr(self, 'start_with_windows_var'):
             config_updates['start_with_windows'] = self.start_with_windows_var.get()
+            # Aplicar autostart se necessário
+            if WINSHELL_AVAILABLE:
+                if config_updates['start_with_windows']:
+                    self.setup_autostart()
+                else:
+                    self.remove_autostart()
+        
         if hasattr(self, 'show_tray_icon_var'):
             config_updates['show_tray_icon'] = self.show_tray_icon_var.get()
+            # Aplicar configuração do ícone da bandeja
+            if PYSTRAY_AVAILABLE and PILLOW_AVAILABLE:
+                if self.tray_icon:
+                    self.tray_icon.stop()
+                    self.tray_icon = None
+                if config_updates['show_tray_icon']:
+                    self.setup_tray_icon()
+        
         if hasattr(self, 'show_notification_var'):
             config_updates['show_notification_on_minimize'] = self.show_notification_var.get()
+        
         if hasattr(self, 'notification_sound_var'):
             config_updates['notification_sound'] = self.notification_sound_var.get()
+        
         if hasattr(self, 'notification_duration_var'):
-            config_updates['notification_duration'] = self.notification_duration_var.get()
+            duration = self.notification_duration_var.get()
+            if 5 <= duration <= 60:
+                config_updates['notification_duration'] = duration
+            else:
+                config_updates['notification_duration'] = self.config.get('notification_duration', 15)
+                self.notification_duration_var.set(config_updates['notification_duration'])
+        
+        if hasattr(self, 'check_interval_var'):
+            interval = self.check_interval_var.get()
+            if 1 <= interval <= 1440:
+                config_updates['check_interval'] = interval
+            else:
+                config_updates['check_interval'] = self.config.get('check_interval', 60)
+                self.check_interval_var.set(config_updates['check_interval'])
+        
+        if hasattr(self, 'theme_var'):
+            config_updates['theme'] = self.theme_var.get()
+            # Se o tema foi alterado, mostrar mensagem
+            if config_updates['theme'] != self.config.get('theme', 'light'):
+                messagebox.showinfo("Tema", "O tema será aplicado na próxima inicialização do aplicativo.")
         
         self.config.update(config_updates)
         
@@ -1579,8 +1508,8 @@ class TaskReminderApp:
     def restore_default_settings(self):
         """Restaura as configurações padrão"""
         if messagebox.askyesno("Confirmar", 
-                              "Deseja restaurar todas as configurações para os valores padrão?\n\n"
-                              "Esta ação não pode ser desfeita."):
+                            "Deseja restaurar todas as configurações para os valores padrão?\n\n"
+                            "Esta ação não pode ser desfeita."):
             default_config = {
                 "start_with_windows": True,
                 "minimize_to_tray": True,
@@ -1593,9 +1522,8 @@ class TaskReminderApp:
             }
             
             self.config = default_config
-            self.save_config(default_config)
             
-            # Atualizar variáveis se existirem
+            # Atualizar variáveis de interface
             if hasattr(self, 'start_with_windows_var'):
                 self.start_with_windows_var.set(True)
             if hasattr(self, 'minimize_to_tray_var'):
@@ -1613,16 +1541,20 @@ class TaskReminderApp:
             if hasattr(self, 'theme_var'):
                 self.theme_var.set("light")
             
-            # Reconfigurar autostart se disponível
+            # Aplicar mudanças imediatamente para restaurar padrões
+            # Reconfigurar autostart
             if WINSHELL_AVAILABLE:
                 self.setup_autostart()
             
-            # Reconfigurar ícone da bandeja se disponível
+            # Reconfigurar ícone da bandeja
             if self.tray_icon:
                 self.tray_icon.stop()
                 self.tray_icon = None
             if PYSTRAY_AVAILABLE and PILLOW_AVAILABLE:
                 self.setup_tray_icon()
+            
+            # Salvar configurações
+            self.save_config(default_config)
             
             messagebox.showinfo("Sucesso", "Configurações padrão restauradas!")
             self.status_var.set("🔄 Configurações restauradas")
