@@ -167,6 +167,9 @@ class TaskReminderApp:
         # Configurar interface
         self.setup_ui()
         
+        # Configurar eventos de teclado
+        self.setup_keyboard_shortcuts()
+        
         # Carregar tarefas
         self.load_tasks()
         self.load_tasks_to_table()
@@ -200,6 +203,54 @@ class TaskReminderApp:
                 ctypes.windll.kernel32.CloseHandle(whnd)
         except:
             pass
+
+    def setup_keyboard_shortcuts(self):
+        """Configura os atalhos de teclado"""
+        # Apertar Enter em qualquer campo de entrada adiciona a tarefa
+        self.root.bind('<Return>', self.handle_enter_key)
+        
+        # F2 para editar tarefa selecionada
+        self.root.bind('<F2>', lambda e: self.edit_selected_task())
+        
+        # Delete para excluir tarefa selecionada
+        self.root.bind('<Delete>', lambda e: self.remove_selected_task())
+        
+        # F1 para marcar como concluída
+        self.root.bind('<F1>', lambda e: self.mark_as_completed())
+        
+        # Esc para cancelar edição
+        self.root.bind('<Escape>', lambda e: self.cancel_edit())
+        
+        # Ctrl+N para nova tarefa (focar no campo de descrição)
+        self.root.bind('<Control-n>', lambda e: self.focus_new_task())
+        
+        # Ctrl+S para salvar quando estiver editando
+        self.root.bind('<Control-s>', lambda e: self.update_task() if self.editing_task_id else None)
+
+        # F3 para limpar concluídas
+        self.root.bind('<F3>', lambda e: self.clear_completed_tasks())
+
+    def handle_enter_key(self, event):
+        """Lida com a tecla Enter baseado no widget que tem foco"""
+        widget = event.widget
+        
+        # Se estiver editando e apertar Enter no campo de descrição, data ou hora
+        if self.editing_task_id and widget in [self.task_entry, self.date_entry, self.time_entry]:
+            self.update_task()
+        # Se não estiver editando e apertar Enter em qualquer campo de entrada
+        elif not self.editing_task_id and widget in [self.task_entry, self.date_entry, self.time_entry]:
+            self.add_task()
+        # Se apertar Enter com foco na tabela, edita a tarefa
+        elif widget == self.tree:
+            self.edit_selected_task()
+        
+        # Prevenir comportamento padrão (como beep em alguns casos)
+        return "break"
+
+    def focus_new_task(self):
+        """Foca no campo de descrição para nova tarefa"""
+        self.task_entry.focus()
+        self.task_entry.select_range(0, tk.END)
 
     def check_dependencies(self):
         """Verifica e informa sobre dependências faltantes"""
@@ -482,7 +533,6 @@ class TaskReminderApp:
         self.task_entry = ttk.Entry(input_frame, width=50, font=('Segoe UI', 10))
         self.task_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
         self.task_entry.focus()
-        self.task_entry.bind('<Return>', lambda e: self.add_task())
         
         # Data e Hora
         ttk.Label(input_frame, text="Data/Hora:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -582,7 +632,7 @@ class TaskReminderApp:
         self.tree.column("ID", width=50, anchor=tk.CENTER, minwidth=40)
         self.tree.column("Tarefa", width=400, anchor=tk.W, minwidth=200)
         self.tree.column("Data/Hora", width=120, anchor=tk.CENTER, minwidth=100)
-        self.tree.column("Lembretes", width=150, anchor=tk.CENTER, minwidth=120)  # Aumentei a largura
+        self.tree.column("Lembretes", width=150, anchor=tk.CENTER, minwidth=120)
         self.tree.column("Status", width=100, anchor=tk.CENTER, minwidth=80)
         
         # Scrollbars
@@ -964,6 +1014,9 @@ class TaskReminderApp:
                 self.toggle_edit_buttons(editing=False)
                 
                 self.status_var.set(f"✏️ Tarefa atualizada com sucesso")
+                
+                # Focar no campo de descrição para nova tarefa
+                self.task_entry.focus()
                 break
 
     def cancel_edit(self):
@@ -982,6 +1035,9 @@ class TaskReminderApp:
         self.reminder_10min.set(False)
         self.reminder_30min.set(False)
         self.reminder_1h.set(False)
+        
+        # Focar no campo de descrição
+        self.task_entry.focus()
         
         self.status_var.set("Edição cancelada")
 
@@ -1203,10 +1259,13 @@ class TaskReminderApp:
                         if 'reminder_1h' not in task:
                             task['reminder_1h'] = False
                     
+                    self.tasks = tasks
                     return tasks
             except Exception as e:
                 print(f"Erro ao carregar tarefas: {e}")
+                self.tasks = []
                 return []
+        self.tasks = []
         return []
 
     def schedule_task_notifications(self, task):
