@@ -368,7 +368,7 @@ class TaskReminderApp:
             
         try:
             startup_path = winshell.startup()
-            shortcut_path = os.path.join(startup_path, "TaskReminderPro.lnk")
+            shortcut_path = os.path.join(startup_path, "TaskReminder.lnk")
             
             target = sys.executable
             script = os.path.abspath(__file__)
@@ -398,7 +398,7 @@ class TaskReminderApp:
             
         try:
             startup_path = winshell.startup()
-            shortcut_path = os.path.join(startup_path, "TaskReminderPro.lnk")
+            shortcut_path = os.path.join(startup_path, "TaskReminder.lnk")
             
             if os.path.exists(shortcut_path):
                 os.remove(shortcut_path)
@@ -1639,7 +1639,7 @@ def main():
     """Função principal - oculta o console e inicia o aplicativo"""
     # Verificar se já existe uma instância em execução
     import ctypes
-    mutex_name = "Global\\TaskReminderProApp"
+    mutex_name = "Global\\TaskReminderApp"
     mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
     last_error = ctypes.windll.kernel32.GetLastError()
     
