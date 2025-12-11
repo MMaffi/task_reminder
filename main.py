@@ -42,6 +42,14 @@ try:
 except ImportError:
     WINSHELL_AVAILABLE = False
 
+# Tente importar tkcalendar para o calendário
+try:
+    from tkcalendar import Calendar, DateEntry
+    TKCALENDAR_AVAILABLE = True
+except ImportError:
+    TKCALENDAR_AVAILABLE = False
+    print("tkcalendar não está instalado. Use: pip install tkcalendar")
+
 class NotificationWindow:
     """Janela de notificação personalizada"""
     def __init__(self, task_text, reminder_text=None):
@@ -121,7 +129,7 @@ class TaskReminderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Task Reminder")
-        self.root.geometry("900x700")
+        self.root.geometry("900x750")  # Aumentei um pouco a altura
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         # Ocultar console
@@ -235,10 +243,10 @@ class TaskReminderApp:
         widget = event.widget
         
         # Se estiver editando e apertar Enter no campo de descrição, data ou hora
-        if self.editing_task_id and widget in [self.task_entry, self.date_entry, self.time_entry]:
+        if self.editing_task_id and widget in [self.task_entry, self.time_spinbox_hour, self.time_spinbox_minute]:
             self.update_task()
         # Se não estiver editando e apertar Enter em qualquer campo de entrada
-        elif not self.editing_task_id and widget in [self.task_entry, self.date_entry, self.time_entry]:
+        elif not self.editing_task_id and widget in [self.task_entry, self.time_spinbox_hour, self.time_spinbox_minute]:
             self.add_task()
         # Se apertar Enter com foco na tabela, edita a tarefa
         elif widget == self.tree:
@@ -265,6 +273,8 @@ class TaskReminderApp:
             missing.append("pystray (para ícone na bandeja)")
         if not WINSHELL_AVAILABLE:
             missing.append("winshell/pywin32 (para autostart)")
+        if not TKCALENDAR_AVAILABLE:
+            missing.append("tkcalendar (para seleção de data)")
         
         if missing:
             self.status_var.set("⚠️ Algumas funcionalidades podem estar limitadas")
@@ -540,16 +550,59 @@ class TaskReminderApp:
         datetime_frame = ttk.Frame(input_frame)
         datetime_frame.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         
-        # Data
-        self.date_entry = ttk.Entry(datetime_frame, width=12, font=('Segoe UI', 10))
-        self.date_entry.grid(row=0, column=0, padx=(0, 5))
-        self.date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
+        # Campo de data - use DateEntry se disponível, senão use Entry normal
+        if TKCALENDAR_AVAILABLE:
+            # Configurar data atual como padrão
+            today = datetime.now()
+            self.date_entry = DateEntry(
+                datetime_frame, 
+                width=12,
+                background='darkblue',
+                foreground='white',
+                borderwidth=2,
+                date_pattern='dd/mm/yyyy',
+                font=('Segoe UI', 10),
+                mindate=today  # Só permitir datas futuras ou hoje
+            )
+            self.date_entry.grid(row=0, column=0, padx=(0, 5))
+        else:
+            # Fallback para Entry normal
+            self.date_entry = ttk.Entry(datetime_frame, width=12, font=('Segoe UI', 10))
+            self.date_entry.grid(row=0, column=0, padx=(0, 5))
+            self.date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
-        # Hora
-        next_hour = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
-        self.time_entry = ttk.Entry(datetime_frame, width=8, font=('Segoe UI', 10))
-        self.time_entry.grid(row=0, column=1)
-        self.time_entry.insert(0, next_hour)
+        # Separador
+        ttk.Label(datetime_frame, text="às").grid(row=0, column=1, padx=(5, 5))
+        
+        # Hora - usar Spinbox para hora
+        self.time_spinbox_hour = ttk.Spinbox(
+            datetime_frame,
+            from_=0,
+            to=23,
+            width=4,
+            font=('Segoe UI', 10),
+            wrap=True
+        )
+        self.time_spinbox_hour.grid(row=0, column=2, padx=(0, 2))
+        
+        # Separador de hora e minuto
+        ttk.Label(datetime_frame, text=":").grid(row=0, column=3, padx=(0, 2))
+        
+        # Minuto - usar Spinbox para minuto
+        self.time_spinbox_minute = ttk.Spinbox(
+            datetime_frame,
+            from_=0,
+            to=59,
+            width=4,
+            font=('Segoe UI', 10),
+            wrap=True
+        )
+        self.time_spinbox_minute.grid(row=0, column=4, padx=(0, 5))
+        
+        # Definir valores padrão (próxima hora)
+        next_hour = datetime.now() + timedelta(hours=1)
+        self.time_spinbox_hour.set(next_hour.strftime("%H"))
+        self.time_spinbox_minute.set("00")
         
         # Botão para data/hora atual
         ttk.Button(
@@ -557,7 +610,7 @@ class TaskReminderApp:
             text="Agora", 
             width=8,
             command=self.set_current_time
-        ).grid(row=0, column=2, padx=(10, 0))
+        ).grid(row=0, column=5, padx=(10, 0))
         
         # Lembretes antecipados
         ttk.Label(input_frame, text="Lembretes:").grid(row=2, column=0, sticky=tk.W, pady=5)
@@ -834,17 +887,35 @@ class TaskReminderApp:
     def set_current_time(self):
         """Define a data e hora atuais"""
         now = datetime.now()
-        self.date_entry.delete(0, tk.END)
-        self.time_entry.delete(0, tk.END)
-        self.date_entry.insert(0, now.strftime("%d/%m/%Y"))
-        self.time_entry.insert(0, now.strftime("%H:%M"))
+        
+        # Definir data
+        if TKCALENDAR_AVAILABLE:
+            self.date_entry.set_date(now)
+        else:
+            self.date_entry.delete(0, tk.END)
+            self.date_entry.insert(0, now.strftime("%d/%m/%Y"))
+        
+        # Definir hora e minuto
+        self.time_spinbox_hour.set(now.strftime("%H"))
+        self.time_spinbox_minute.set(now.strftime("%M"))
 
-    def validate_datetime(self, date_str, time_str):
+    def validate_datetime(self, date_str, hour, minute):
         """Valida a data e hora inseridas"""
         try:
-            datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M")
+            # Se estiver usando DateEntry, obter a data diretamente
+            if TKCALENDAR_AVAILABLE:
+                selected_date = self.date_entry.get_date()
+                date_str = selected_date.strftime("%d/%m/%Y")
+            
+            # Formatar hora e minuto com zero à esquerda se necessário
+            hour_str = f"{int(hour):02d}"
+            minute_str = f"{int(minute):02d}"
+            
+            datetime_str = f"{date_str} {hour_str}:{minute_str}"
+            datetime.strptime(datetime_str, "%d/%m/%Y %H:%M")
             return True
-        except ValueError:
+        except ValueError as e:
+            print(f"Erro na validação: {e}")
             return False
 
     def on_task_select(self, event=None):
@@ -871,8 +942,17 @@ class TaskReminderApp:
     def add_task(self):
         """Adiciona uma nova tarefa"""
         task_text = self.task_entry.get().strip()
-        date_text = self.date_entry.get().strip()
-        time_text = self.time_entry.get().strip()
+        
+        # Obter data
+        if TKCALENDAR_AVAILABLE:
+            selected_date = self.date_entry.get_date()
+            date_str = selected_date.strftime("%d/%m/%Y")
+        else:
+            date_str = self.date_entry.get().strip()
+        
+        # Obter hora e minuto
+        hour = self.time_spinbox_hour.get().strip()
+        minute = self.time_spinbox_minute.get().strip()
         
         # Validação
         if not task_text:
@@ -880,7 +960,12 @@ class TaskReminderApp:
             self.task_entry.focus()
             return
         
-        if not self.validate_datetime(date_text, time_text):
+        if not hour or not minute:
+            messagebox.showwarning("Aviso", "Por favor, insira hora e minuto válidos!")
+            self.time_spinbox_hour.focus()
+            return
+        
+        if not self.validate_datetime(date_str, hour, minute):
             messagebox.showerror(
                 "Erro", 
                 "Formato de data/hora inválido!\n\n"
@@ -895,8 +980,12 @@ class TaskReminderApp:
             self.update_task()
             return
         
+        # Formatar hora e minuto
+        hour_str = f"{int(hour):02d}"
+        minute_str = f"{int(minute):02d}"
+        
         # Adicionar nova tarefa
-        task_datetime = datetime.strptime(f"{date_text} {time_text}", "%d/%m/%Y %H:%M")
+        task_datetime = datetime.strptime(f"{date_str} {hour_str}:{minute_str}", "%d/%m/%Y %H:%M")
         now = datetime.now()
         
         task = {
@@ -927,9 +1016,14 @@ class TaskReminderApp:
         
         # Limpar campos
         self.task_entry.delete(0, tk.END)
-        next_hour = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
-        self.time_entry.delete(0, tk.END)
-        self.time_entry.insert(0, next_hour)
+        
+        # Resetar para próxima hora
+        next_hour = (datetime.now() + timedelta(hours=1))
+        if TKCALENDAR_AVAILABLE:
+            self.date_entry.set_date(next_hour)
+        
+        self.time_spinbox_hour.set(next_hour.strftime("%H"))
+        self.time_spinbox_minute.set("00")
         
         # Resetar lembretes
         self.reminder_5min.set(False)
@@ -946,8 +1040,17 @@ class TaskReminderApp:
     def update_task(self):
         """Atualiza uma tarefa existente"""
         task_text = self.task_entry.get().strip()
-        date_text = self.date_entry.get().strip()
-        time_text = self.time_entry.get().strip()
+        
+        # Obter data
+        if TKCALENDAR_AVAILABLE:
+            selected_date = self.date_entry.get_date()
+            date_str = selected_date.strftime("%d/%m/%Y")
+        else:
+            date_str = self.date_entry.get().strip()
+        
+        # Obter hora e minuto
+        hour = self.time_spinbox_hour.get().strip()
+        minute = self.time_spinbox_minute.get().strip()
         
         # Validação
         if not task_text:
@@ -955,7 +1058,12 @@ class TaskReminderApp:
             self.task_entry.focus()
             return
         
-        if not self.validate_datetime(date_text, time_text):
+        if not hour or not minute:
+            messagebox.showwarning("Aviso", "Por favor, insira hora e minuto válidos!")
+            self.time_spinbox_hour.focus()
+            return
+        
+        if not self.validate_datetime(date_str, hour, minute):
             messagebox.showerror(
                 "Erro", 
                 "Formato de data/hora inválido!\n\n"
@@ -969,7 +1077,11 @@ class TaskReminderApp:
             messagebox.showwarning("Aviso", "Nenhuma tarefa está sendo editada!")
             return
         
-        task_datetime = datetime.strptime(f"{date_text} {time_text}", "%d/%m/%Y %H:%M")
+        # Formatar hora e minuto
+        hour_str = f"{int(hour):02d}"
+        minute_str = f"{int(minute):02d}"
+        
+        task_datetime = datetime.strptime(f"{date_str} {hour_str}:{minute_str}", "%d/%m/%Y %H:%M")
         now = datetime.now()
         
         # Atualizar tarefa
@@ -1016,9 +1128,14 @@ class TaskReminderApp:
         
         # Limpar campos
         self.task_entry.delete(0, tk.END)
-        next_hour = (datetime.now() + timedelta(hours=1)).strftime("%H:%M")
-        self.time_entry.delete(0, tk.END)
-        self.time_entry.insert(0, next_hour)
+        
+        # Resetar data e hora
+        next_hour = datetime.now() + timedelta(hours=1)
+        if TKCALENDAR_AVAILABLE:
+            self.date_entry.set_date(next_hour)
+        
+        self.time_spinbox_hour.set(next_hour.strftime("%H"))
+        self.time_spinbox_minute.set("00")
         
         # Resetar lembretes
         self.reminder_5min.set(False)
@@ -1049,11 +1166,17 @@ class TaskReminderApp:
                 self.task_entry.insert(0, task['task'])
                 
                 task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
-                self.date_entry.delete(0, tk.END)
-                self.date_entry.insert(0, task_datetime.strftime("%d/%m/%Y"))
                 
-                self.time_entry.delete(0, tk.END)
-                self.time_entry.insert(0, task_datetime.strftime("%H:%M"))
+                # Definir data
+                if TKCALENDAR_AVAILABLE:
+                    self.date_entry.set_date(task_datetime)
+                else:
+                    self.date_entry.delete(0, tk.END)
+                    self.date_entry.insert(0, task_datetime.strftime("%d/%m/%Y"))
+                
+                # Definir hora e minuto
+                self.time_spinbox_hour.set(task_datetime.strftime("%H"))
+                self.time_spinbox_minute.set(task_datetime.strftime("%M"))
                 
                 # Carregar lembretes
                 self.reminder_5min.set(task.get('reminder_5min', False))
@@ -1259,7 +1382,7 @@ class TaskReminderApp:
         return []
 
     def schedule_task_notifications(self, task):
-        """Agenda as notificações para uma tarefa"""
+        """Agenda as notificações para uma tarefa - CORRIGIDO para datas futuras"""
         if not SCHEDULE_AVAILABLE:
             return
             
@@ -1271,57 +1394,78 @@ class TaskReminderApp:
             now = datetime.now()
             
             if task_time > now:
-                # Notificação principal
-                time_str = task_time.strftime("%H:%M")
-                schedule.every().day.at(time_str).do(
-                    self.send_main_notification, 
-                    task['id'], 
-                    task['task']
-                ).tag(f"task_{task['id']}")
+                # CORREÇÃO: Usar schedule.every() combinado com .at() para o horário específico
+                # Agendar para o dia e hora específicos
+                time_delta = task_time - now
+                
+                # Função para agendar notificação em um momento específico
+                def schedule_at_time(func, time_str):
+                    # Remove qualquer agendamento anterior para esta tarefa
+                    schedule.clear(f"task_{task['id']}")
+                    
+                    # Se for para hoje, usar schedule.every().day.at()
+                    if task_time.date() == now.date():
+                        schedule.every().day.at(time_str).do(func).tag(f"task_{task['id']}")
+                    else:
+                        # Para datas futuras, usar threading.Timer
+                        wait_seconds = (task_time - now).total_seconds()
+                        if wait_seconds > 0:
+                            timer = threading.Timer(wait_seconds, func)
+                            timer.daemon = True
+                            timer.start()
+                
+                # Função wrapper para notificação principal
+                def main_notification():
+                    self.send_main_notification(task['id'], task['task'])
+                
+                # Agendar notificação principal
+                schedule_at_time(main_notification, task_time.strftime("%H:%M"))
+                
+                # Função wrapper para notificação de lembrete
+                def create_reminder_notification(minutes):
+                    def reminder():
+                        self.send_reminder_notification(task['id'], task['task'], f"{minutes} minutos")
+                    return reminder
                 
                 # Notificação 5 minutos antes
                 if task.get('reminder_5min'):
                     reminder_time = task_time - timedelta(minutes=5)
                     if reminder_time > now:
-                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
-                            self.send_reminder_notification,
-                            task['id'],
-                            task['task'],
-                            "5 minutos"
-                        ).tag(f"reminder_5min_{task['id']}")
+                        wait_seconds = (reminder_time - now).total_seconds()
+                        if wait_seconds > 0:
+                            timer = threading.Timer(wait_seconds, create_reminder_notification(5))
+                            timer.daemon = True
+                            timer.start()
                 
                 # Notificação 10 minutos antes
                 if task.get('reminder_10min'):
                     reminder_time = task_time - timedelta(minutes=10)
                     if reminder_time > now:
-                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
-                            self.send_reminder_notification,
-                            task['id'],
-                            task['task'],
-                            "10 minutos"
-                        ).tag(f"reminder_10min_{task['id']}")
+                        wait_seconds = (reminder_time - now).total_seconds()
+                        if wait_seconds > 0:
+                            timer = threading.Timer(wait_seconds, create_reminder_notification(10))
+                            timer.daemon = True
+                            timer.start()
                 
                 # Notificação 30 minutos antes
                 if task.get('reminder_30min'):
                     reminder_time = task_time - timedelta(minutes=30)
                     if reminder_time > now:
-                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
-                            self.send_reminder_notification,
-                            task['id'],
-                            task['task'],
-                            "30 minutos"
-                        ).tag(f"reminder_30min_{task['id']}")
+                        wait_seconds = (reminder_time - now).total_seconds()
+                        if wait_seconds > 0:
+                            timer = threading.Timer(wait_seconds, create_reminder_notification(30))
+                            timer.daemon = True
+                            timer.start()
                 
                 # Notificação 1 hora antes
                 if task.get('reminder_1h'):
                     reminder_time = task_time - timedelta(hours=1)
                     if reminder_time > now:
-                        schedule.every().day.at(reminder_time.strftime("%H:%M")).do(
-                            self.send_reminder_notification,
-                            task['id'],
-                            task['task'],
-                            "1 hora"
-                        ).tag(f"reminder_1h_{task['id']}")
+                        wait_seconds = (reminder_time - now).total_seconds()
+                        if wait_seconds > 0:
+                            timer = threading.Timer(wait_seconds, create_reminder_notification(60))
+                            timer.daemon = True
+                            timer.start()
                         
         except Exception as e:
             print(f"Erro ao agendar notificações: {e}")
@@ -1396,6 +1540,7 @@ class TaskReminderApp:
             return
             
         schedule.clear()
+        # Limpar qualquer timer pendente
         for task in self.tasks:
             if task.get('status') == 'Pendente':
                 self.schedule_task_notifications(task)
