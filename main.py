@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 import traceback
 
-# Tente importar bibliotecas opcionais com fallback
+# Tente importar bibliotecas opcionais
 try:
     from plyer import notification
     PLYER_AVAILABLE = True
@@ -42,7 +42,6 @@ try:
 except ImportError:
     WINSHELL_AVAILABLE = False
 
-# Tente importar tkcalendar para o calendário
 try:
     from tkcalendar import Calendar, DateEntry
     TKCALENDAR_AVAILABLE = True
@@ -51,7 +50,7 @@ except ImportError:
     print("tkcalendar não está instalado. Use: pip install tkcalendar")
 
 class NotificationWindow:
-    """Janela de notificação personalizada"""
+    """Janela de notificação"""
     def __init__(self, task_text, reminder_text=None):
         self.window = tk.Tk()
         self.window.title("Task Reminder - Notificação")
@@ -118,18 +117,16 @@ class NotificationWindow:
         self.window.bind('<Return>', lambda e: self.on_close())
         
     def on_close(self):
-        """Fecha a janela de notificação"""
         self.window.destroy()
         
     def show(self):
-        """Mostra a janela de notificação"""
         self.window.mainloop()
 
 class TaskReminderApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Task Reminder")
-        self.root.geometry("900x750")  # Aumentei um pouco a altura
+        self.root.geometry("900x750")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         # Ocultar console
@@ -161,9 +158,10 @@ class TaskReminderApp:
         self.tray_icon = None
         self.editing_task_id = None
         self.notification_windows = []
-        self.is_quitting = False  # Flag para controlar se está saindo
-        self.add_button = None  # Botão de adicionar tarefa
-        self.update_button = None  # Botão de atualizar tarefa
+        self.is_quitting = False 
+        self.add_button = None 
+        self.update_button = None 
+        self.active_timers = []
         
         # Configurar cores
         self.setup_colors()
@@ -182,15 +180,11 @@ class TaskReminderApp:
         self.load_tasks()
         self.load_tasks_to_table()
         
-        # Configurar autostart se necessário
+        # Configurar autostart
         if self.config.get("start_with_windows", True) and WINSHELL_AVAILABLE:
             self.setup_autostart()
         
-        # Iniciar scheduler em thread separada se disponível
-        if SCHEDULE_AVAILABLE:
-            self.start_scheduler()
-        
-        # Configurar ícone na bandeja do sistema se disponível
+        # Configurar ícone na bandeja
         if self.config.get("show_tray_icon", True) and PYSTRAY_AVAILABLE and PILLOW_AVAILABLE:
             self.setup_tray_icon()
         
@@ -199,11 +193,13 @@ class TaskReminderApp:
         
         # Verificar dependências
         self.check_dependencies()
+        
+        # Agendar notificações para tarefas existentes
+        self.reschedule_all_tasks()
 
     def hide_console(self):
         """Oculta o console do Windows"""
         try:
-            # Para Windows - oculta o console
             import ctypes
             whnd = ctypes.windll.kernel32.GetConsoleWindow()
             if whnd != 0:
@@ -213,14 +209,14 @@ class TaskReminderApp:
             pass
 
     def setup_keyboard_shortcuts(self):
-        """Configura os atalhos de teclado"""
-        # Apertar Enter em qualquer campo de entrada adiciona a tarefa
+        """atalhos de teclado"""
+        # Apertar Enter
         self.root.bind('<Return>', self.handle_enter_key)
         
-        # F2 para editar tarefa selecionada
+        # F2 para editar tarefa
         self.root.bind('<F2>', lambda e: self.edit_selected_task())
         
-        # Delete para excluir tarefa selecionada
+        # Delete para excluir tarefa
         self.root.bind('<Delete>', lambda e: self.remove_selected_task())
         
         # F1 para marcar como concluída
@@ -229,30 +225,26 @@ class TaskReminderApp:
         # Esc para cancelar edição
         self.root.bind('<Escape>', lambda e: self.cancel_edit())
         
-        # Ctrl+N para nova tarefa (focar no campo de descrição)
+        # Ctrl+N para nova tarefa
         self.root.bind('<Control-n>', lambda e: self.focus_new_task())
         
-        # Ctrl+S para salvar quando estiver editando
+        # Ctrl+S para salvar
         self.root.bind('<Control-s>', lambda e: self.update_task() if self.editing_task_id else None)
 
         # F3 para limpar concluídas
         self.root.bind('<F3>', lambda e: self.clear_completed_tasks())
 
     def handle_enter_key(self, event):
-        """Lida com a tecla Enter baseado no widget que tem foco"""
         widget = event.widget
         
-        # Se estiver editando e apertar Enter no campo de descrição, data ou hora
         if self.editing_task_id and widget in [self.task_entry, self.time_spinbox_hour, self.time_spinbox_minute]:
             self.update_task()
-        # Se não estiver editando e apertar Enter em qualquer campo de entrada
         elif not self.editing_task_id and widget in [self.task_entry, self.time_spinbox_hour, self.time_spinbox_minute]:
             self.add_task()
-        # Se apertar Enter com foco na tabela, edita a tarefa
         elif widget == self.tree:
             self.edit_selected_task()
         
-        # Prevenir comportamento padrão (como beep em alguns casos)
+        # Prevenir comportamento padrão
         return "break"
 
     def focus_new_task(self):
@@ -261,7 +253,6 @@ class TaskReminderApp:
         self.task_entry.select_range(0, tk.END)
 
     def check_dependencies(self):
-        """Verifica e informa sobre dependências faltantes"""
         missing = []
         if not PLYER_AVAILABLE:
             missing.append("plyer (para notificações do sistema)")
@@ -280,7 +271,7 @@ class TaskReminderApp:
             self.status_var.set("⚠️ Algumas funcionalidades podem estar limitadas")
 
     def setup_colors(self):
-        """Configura as cores do aplicativo"""
+        """Configura as cores"""
         self.colors = {
             'bg': '#f8f9fa',
             'fg': '#212529',
@@ -295,7 +286,7 @@ class TaskReminderApp:
         }
 
     def load_config(self):
-        """Carrega as configurações do arquivo config.json"""
+        """Carrega as configurações"""
         default_config = {
             "start_with_windows": True,
             "minimize_to_tray": True,
@@ -311,19 +302,18 @@ class TaskReminderApp:
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded_config = json.load(f)
-                    # Mesclar com padrão para garantir todas as chaves
                     default_config.update(loaded_config)
                     return default_config
             except Exception as e:
                 print(f"Erro ao carregar configurações: {e}")
                 return default_config
         else:
-            # Salvar configurações padrão
+            # Salvar configurações
             self.save_config(default_config)
             return default_config
 
     def save_config(self, config=None):
-        """Salva as configurações no arquivo config.json"""
+        """Salva as configurações"""
         if config is None:
             config = self.config
         
@@ -341,7 +331,6 @@ class TaskReminderApp:
             if os.path.exists(self.icon_file):
                 self.root.iconbitmap(default=str(self.icon_file))
             else:
-                # Tentar criar ícone padrão na pasta images
                 self.create_default_icon()
                 if os.path.exists(self.icon_file):
                     self.root.iconbitmap(default=str(self.icon_file))
@@ -349,12 +338,10 @@ class TaskReminderApp:
             pass
 
     def create_default_icon(self):
-        """Cria um ícone padrão para o aplicativo na pasta images"""
         if not PILLOW_AVAILABLE:
             return
             
         try:
-            # Criar uma imagem 64x64
             image = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
             draw = ImageDraw.Draw(image)
             
@@ -366,7 +353,7 @@ class TaskReminderApp:
             draw.line([(32, 40), (32, 44)], fill='white', width=2)
             draw.ellipse([(30, 44), (34, 48)], fill='white')
             
-            # Salvar como ICO na pasta images
+            # Salvar como ICO
             image.save(self.icon_file, format='ICO')
         except Exception as e:
             print(f"Erro ao criar ícone padrão: {e}")
@@ -388,8 +375,7 @@ class TaskReminderApp:
             shortcut.Targetpath = target
             shortcut.Arguments = f'"{script}" --minimized'
             shortcut.WorkingDirectory = os.path.dirname(script)
-            
-            # Agora o ícone está na pasta images
+
             if os.path.exists(self.icon_file):
                 shortcut.IconLocation = str(self.icon_file)
             
@@ -423,21 +409,17 @@ class TaskReminderApp:
             return
             
         try:
-            # Carregar imagem para o ícone da bandeja da pasta images
             if os.path.exists(self.icon_file):
                 image = Image.open(self.icon_file)
             else:
-                # Usar ícone simples se não existir
                 image = Image.new('RGB', (64, 64), color='#007bff')
             
-            # Criar menu da bandeja
             menu = (
                 item('Mostrar', self.show_window),
                 item('Configurações', self.open_settings),
                 item('Sair', self.quit_app_silent)
             )
             
-            # Criar ícone da bandeja
             self.tray_icon = pystray.Icon(
                 "task_reminder",
                 image,
@@ -452,14 +434,14 @@ class TaskReminderApp:
             print(f"Erro ao configurar ícone da bandeja: {e}")
 
     def on_closing(self):
-        """Trata o fechamento da janela"""
+        """fechamento da janela"""
         if self.config.get("minimize_to_tray", True):
             self.hide_to_tray()
         else:
             self.quit_app_silent()
 
     def hide_to_tray(self):
-        """Esconde a janela para a bandeja do sistema"""
+        """Esconde a janela"""
         self.root.withdraw()
         if self.config.get("show_notification_on_minimize", True) and PLYER_AVAILABLE:
             try:
@@ -488,7 +470,7 @@ class TaskReminderApp:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         
-        # Notebook (abas)
+        # Abas
         self.notebook = ttk.Notebook(self.root)
         self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         
@@ -511,10 +493,8 @@ class TaskReminderApp:
         else:
             style.theme_use('clam')
         
-        # Configurar cores para Treeview
         self.root.configure(bg=self.colors['bg'])
         
-        # Configurar botão de destaque
         style.configure("Accent.TButton", 
                        background=self.colors['accent'],
                        foreground='white',
@@ -529,28 +509,23 @@ class TaskReminderApp:
         tasks_frame = ttk.Frame(self.notebook)
         self.notebook.add(tasks_frame, text="📋 Tarefas")
         
-        # Configurar grid
         tasks_frame.columnconfigure(0, weight=1)
         tasks_frame.rowconfigure(1, weight=1)
         
-        # Frame de entrada
         input_frame = ttk.LabelFrame(tasks_frame, text="Nova Tarefa", padding="15")
         input_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         input_frame.columnconfigure(1, weight=1)
         
-        # Descrição da tarefa
         ttk.Label(input_frame, text="Descrição:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.task_entry = ttk.Entry(input_frame, width=50, font=('Segoe UI', 10))
         self.task_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(10, 0))
         self.task_entry.focus()
         
-        # Data e Hora
         ttk.Label(input_frame, text="Data/Hora:").grid(row=1, column=0, sticky=tk.W, pady=5)
         
         datetime_frame = ttk.Frame(input_frame)
         datetime_frame.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         
-        # Campo de data - use DateEntry se disponível, senão use Entry normal
         if TKCALENDAR_AVAILABLE:
             # Configurar data atual como padrão
             today = datetime.now()
@@ -562,19 +537,16 @@ class TaskReminderApp:
                 borderwidth=2,
                 date_pattern='dd/mm/yyyy',
                 font=('Segoe UI', 10),
-                mindate=today  # Só permitir datas futuras ou hoje
+                mindate=today
             )
             self.date_entry.grid(row=0, column=0, padx=(0, 5))
         else:
-            # Fallback para Entry normal
             self.date_entry = ttk.Entry(datetime_frame, width=12, font=('Segoe UI', 10))
             self.date_entry.grid(row=0, column=0, padx=(0, 5))
             self.date_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
         
-        # Separador
         ttk.Label(datetime_frame, text="às").grid(row=0, column=1, padx=(5, 5))
         
-        # Hora - usar Spinbox para hora
         self.time_spinbox_hour = ttk.Spinbox(
             datetime_frame,
             from_=0,
@@ -585,10 +557,8 @@ class TaskReminderApp:
         )
         self.time_spinbox_hour.grid(row=0, column=2, padx=(0, 2))
         
-        # Separador de hora e minuto
         ttk.Label(datetime_frame, text=":").grid(row=0, column=3, padx=(0, 2))
         
-        # Minuto - usar Spinbox para minuto
         self.time_spinbox_minute = ttk.Spinbox(
             datetime_frame,
             from_=0,
@@ -599,12 +569,10 @@ class TaskReminderApp:
         )
         self.time_spinbox_minute.grid(row=0, column=4, padx=(0, 5))
         
-        # Definir valores padrão (próxima hora)
         next_hour = datetime.now() + timedelta(hours=1)
         self.time_spinbox_hour.set(next_hour.strftime("%H"))
         self.time_spinbox_minute.set("00")
         
-        # Botão para data/hora atual
         ttk.Button(
             datetime_frame, 
             text="Agora", 
@@ -612,19 +580,16 @@ class TaskReminderApp:
             command=self.set_current_time
         ).grid(row=0, column=5, padx=(10, 0))
         
-        # Lembretes antecipados
         ttk.Label(input_frame, text="Lembretes:").grid(row=2, column=0, sticky=tk.W, pady=5)
         
         reminders_frame = ttk.Frame(input_frame)
         reminders_frame.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         
-        # Variáveis para os checkboxes de lembretes
         self.reminder_5min = tk.BooleanVar()
         self.reminder_10min = tk.BooleanVar()
         self.reminder_30min = tk.BooleanVar()
         self.reminder_1h = tk.BooleanVar()
         
-        # Grid para os checkboxes (2 linhas, 2 colunas)
         ttk.Checkbutton(reminders_frame, text="5 min antes", 
                        variable=self.reminder_5min).grid(row=0, column=0, padx=(0, 10), sticky=tk.W)
         ttk.Checkbutton(reminders_frame, text="10 min antes", 
@@ -634,11 +599,9 @@ class TaskReminderApp:
         ttk.Checkbutton(reminders_frame, text="1 hora antes", 
                        variable=self.reminder_1h).grid(row=1, column=1, sticky=tk.W)
         
-        # Frame para botões (Adicionar/Atualizar/Cancelar)
         button_frame = ttk.Frame(input_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=(15, 0))
         
-        # Botão de adicionar tarefa (visível por padrão)
         self.add_button = ttk.Button(
             button_frame, 
             text="➕ Adicionar Tarefa", 
@@ -648,7 +611,6 @@ class TaskReminderApp:
         )
         self.add_button.grid(row=0, column=0, padx=2)
         
-        # Botão de atualizar tarefa (inicialmente escondido)
         self.update_button = ttk.Button(
             button_frame, 
             text="✅ Atualizar Tarefa", 
@@ -657,7 +619,6 @@ class TaskReminderApp:
             width=20
         )
         
-        # Botão de cancelar edição (inicialmente escondido)
         self.cancel_button = ttk.Button(
             button_frame, 
             text="❌ Cancelar Edição", 
@@ -665,17 +626,14 @@ class TaskReminderApp:
             width=20
         )
         
-        # Frame da lista de tarefas
         list_frame = ttk.LabelFrame(tasks_frame, text="Tarefas Agendadas", padding="10")
         list_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         
-        # Tabela de tarefas com Treeview
         columns = ("ID", "Tarefa", "Data/Hora", "Lembretes", "Status")
         self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
         
-        # Configurar colunas
         self.tree.heading("ID", text="ID", anchor=tk.CENTER)
         self.tree.heading("Tarefa", text="Tarefa", anchor=tk.W)
         self.tree.heading("Data/Hora", text="Data/Hora", anchor=tk.CENTER)
@@ -688,7 +646,6 @@ class TaskReminderApp:
         self.tree.column("Lembretes", width=150, anchor=tk.CENTER, minwidth=120)
         self.tree.column("Status", width=100, anchor=tk.CENTER, minwidth=80)
         
-        # Scrollbars
         vsb = ttk.Scrollbar(list_frame, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(list_frame, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -697,7 +654,6 @@ class TaskReminderApp:
         vsb.grid(row=0, column=1, sticky=(tk.N, tk.S))
         hsb.grid(row=1, column=0, sticky=(tk.W, tk.E))
         
-        # Botões de ação para tarefas
         action_frame = ttk.Frame(list_frame)
         action_frame.grid(row=2, column=0, columnspan=2, pady=(10, 0))
         
@@ -729,7 +685,6 @@ class TaskReminderApp:
             width=25
         ).grid(row=0, column=3, padx=2)
         
-        # Bind de seleção na tabela
         self.tree.bind('<<TreeviewSelect>>', self.on_task_select)
         self.tree.bind('<Double-Button-1>', lambda e: self.edit_selected_task())
 
@@ -738,10 +693,8 @@ class TaskReminderApp:
         settings_frame = ttk.Frame(self.notebook)
         self.notebook.add(settings_frame, text="⚙️ Configurações")
         
-        # Configurar grid
         settings_frame.columnconfigure(0, weight=1)
         
-        # Frame de configurações gerais
         general_frame = ttk.LabelFrame(settings_frame, text="Configurações Gerais", padding="15")
         general_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=10, pady=10)
         
@@ -796,7 +749,7 @@ class TaskReminderApp:
             ).grid(row=row, column=0, sticky=tk.W, pady=5)
             row += 1
         
-        # Duração da notificação (para notificações do sistema)
+        # Duração da notificação
         if PLYER_AVAILABLE:
             ttk.Label(general_frame, text="Duração da notificação (segundos):").grid(row=row, column=0, sticky=tk.W, pady=5)
             
@@ -902,12 +855,10 @@ class TaskReminderApp:
     def validate_datetime(self, date_str, hour, minute):
         """Valida a data e hora inseridas"""
         try:
-            # Se estiver usando DateEntry, obter a data diretamente
             if TKCALENDAR_AVAILABLE:
                 selected_date = self.date_entry.get_date()
                 date_str = selected_date.strftime("%d/%m/%Y")
             
-            # Formatar hora e minuto com zero à esquerda se necessário
             hour_str = f"{int(hour):02d}"
             minute_str = f"{int(minute):02d}"
             
@@ -927,34 +878,31 @@ class TaskReminderApp:
     def toggle_edit_buttons(self, editing=True):
         """Alterna entre os botões Adicionar/Atualizar/Cancelar"""
         if editing:
-            # Esconder botão de adicionar
+
             self.add_button.grid_remove()
-            # Mostrar botões de atualizar e cancelar
+
             self.update_button.grid(row=0, column=0, padx=2)
             self.cancel_button.grid(row=0, column=1, padx=2)
         else:
-            # Esconder botões de atualizar e cancelar
+
             self.update_button.grid_remove()
             self.cancel_button.grid_remove()
-            # Mostrar botão de adicionar
+
             self.add_button.grid(row=0, column=0, padx=2)
 
     def add_task(self):
         """Adiciona uma nova tarefa"""
         task_text = self.task_entry.get().strip()
         
-        # Obter data
         if TKCALENDAR_AVAILABLE:
             selected_date = self.date_entry.get_date()
             date_str = selected_date.strftime("%d/%m/%Y")
         else:
             date_str = self.date_entry.get().strip()
         
-        # Obter hora e minuto
         hour = self.time_spinbox_hour.get().strip()
         minute = self.time_spinbox_minute.get().strip()
         
-        # Validação
         if not task_text:
             messagebox.showwarning("Aviso", "Por favor, insira uma descrição para a tarefa!")
             self.task_entry.focus()
@@ -1010,9 +958,8 @@ class TaskReminderApp:
         # Atualizar interface
         self.load_tasks_to_table()
         
-        # Agendar notificações se disponível
-        if SCHEDULE_AVAILABLE:
-            self.schedule_task_notifications(task)
+        # Agendar notificações
+        self.schedule_task_notifications(task)
         
         # Limpar campos
         self.task_entry.delete(0, tk.END)
@@ -1041,18 +988,15 @@ class TaskReminderApp:
         """Atualiza uma tarefa existente"""
         task_text = self.task_entry.get().strip()
         
-        # Obter data
         if TKCALENDAR_AVAILABLE:
             selected_date = self.date_entry.get_date()
             date_str = selected_date.strftime("%d/%m/%Y")
         else:
             date_str = self.date_entry.get().strip()
         
-        # Obter hora e minuto
         hour = self.time_spinbox_hour.get().strip()
         minute = self.time_spinbox_minute.get().strip()
         
-        # Validação
         if not task_text:
             messagebox.showwarning("Aviso", "Por favor, insira uma descrição para a tarefa!")
             self.task_entry.focus()
@@ -1077,14 +1021,12 @@ class TaskReminderApp:
             messagebox.showwarning("Aviso", "Nenhuma tarefa está sendo editada!")
             return
         
-        # Formatar hora e minuto
         hour_str = f"{int(hour):02d}"
         minute_str = f"{int(minute):02d}"
         
         task_datetime = datetime.strptime(f"{date_str} {hour_str}:{minute_str}", "%d/%m/%Y %H:%M")
         now = datetime.now()
         
-        # Atualizar tarefa
         for task in self.tasks:
             if task['id'] == self.editing_task_id:
                 task['task'] = task_text
@@ -1096,28 +1038,22 @@ class TaskReminderApp:
                 task['status'] = "Pendente"
                 task['is_overdue'] = task_datetime < now
                 
-                # Salvar alterações
                 self.save_tasks()
                 self.load_tasks_to_table()
                 
-                # Reagendar notificações se disponível
-                if SCHEDULE_AVAILABLE:
-                    self.reschedule_all_tasks()
+                self.reschedule_all_tasks()
                 
-                # Limpar campos
                 self.task_entry.delete(0, tk.END)
                 self.reminder_5min.set(False)
                 self.reminder_10min.set(False)
                 self.reminder_30min.set(False)
                 self.reminder_1h.set(False)
                 
-                # Resetar edição e voltar para modo adicionar
                 self.editing_task_id = None
                 self.toggle_edit_buttons(editing=False)
                 
                 self.status_var.set(f"✏️ Tarefa atualizada com sucesso")
                 
-                # Focar no campo de descrição para nova tarefa
                 self.task_entry.focus()
                 break
 
@@ -1126,10 +1062,8 @@ class TaskReminderApp:
         self.editing_task_id = None
         self.toggle_edit_buttons(editing=False)
         
-        # Limpar campos
         self.task_entry.delete(0, tk.END)
         
-        # Resetar data e hora
         next_hour = datetime.now() + timedelta(hours=1)
         if TKCALENDAR_AVAILABLE:
             self.date_entry.set_date(next_hour)
@@ -1137,13 +1071,11 @@ class TaskReminderApp:
         self.time_spinbox_hour.set(next_hour.strftime("%H"))
         self.time_spinbox_minute.set("00")
         
-        # Resetar lembretes
         self.reminder_5min.set(False)
         self.reminder_10min.set(False)
         self.reminder_30min.set(False)
         self.reminder_1h.set(False)
         
-        # Focar no campo de descrição
         self.task_entry.focus()
         
         self.status_var.set("Edição cancelada")
@@ -1158,7 +1090,6 @@ class TaskReminderApp:
         item = self.tree.item(selected[0])
         task_id = item['values'][0]
         
-        # Encontrar a tarefa
         for task in self.tasks:
             if task['id'] == task_id:
                 # Carregar dados nos campos
@@ -1167,24 +1098,20 @@ class TaskReminderApp:
                 
                 task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
                 
-                # Definir data
                 if TKCALENDAR_AVAILABLE:
                     self.date_entry.set_date(task_datetime)
                 else:
                     self.date_entry.delete(0, tk.END)
                     self.date_entry.insert(0, task_datetime.strftime("%d/%m/%Y"))
                 
-                # Definir hora e minuto
                 self.time_spinbox_hour.set(task_datetime.strftime("%H"))
                 self.time_spinbox_minute.set(task_datetime.strftime("%M"))
                 
-                # Carregar lembretes
                 self.reminder_5min.set(task.get('reminder_5min', False))
                 self.reminder_10min.set(task.get('reminder_10min', False))
                 self.reminder_30min.set(task.get('reminder_30min', False))
                 self.reminder_1h.set(task.get('reminder_1h', False))
                 
-                # Marcar que está editando e alternar botões
                 self.editing_task_id = task_id
                 self.toggle_edit_buttons(editing=True)
                 
@@ -1215,11 +1142,9 @@ class TaskReminderApp:
             # Atualizar interface
             self.load_tasks_to_table()
             
-            # Reagendar notificações se disponível
-            if SCHEDULE_AVAILABLE:
-                self.reschedule_all_tasks()
-            
-            # Limpar campos se estava editando esta tarefa
+            # Reagendar notificações
+            self.reschedule_all_tasks()
+
             if self.editing_task_id == task_id:
                 self.task_entry.delete(0, tk.END)
                 self.reminder_5min.set(False)
@@ -1250,8 +1175,7 @@ class TaskReminderApp:
         self.save_tasks()
         self.load_tasks_to_table()
         
-        if SCHEDULE_AVAILABLE:
-            self.reschedule_all_tasks()
+        self.reschedule_all_tasks()
         
         self.status_var.set("✅ Tarefa marcada como concluída")
 
@@ -1265,24 +1189,23 @@ class TaskReminderApp:
         
         if messagebox.askyesno("Confirmar", 
                               f"Deseja remover {len(completed_tasks)} tarefa(s) concluída(s)?"):
-            # Manter apenas tarefas não concluídas
+
             self.tasks = [t for t in self.tasks if t.get('status') != 'Concluída']
             
             self.save_tasks()
             self.load_tasks_to_table()
             
-            if SCHEDULE_AVAILABLE:
-                self.reschedule_all_tasks()
+            # Reagendar notificações
+            self.reschedule_all_tasks()
             
             self.status_var.set(f"🧹 {len(completed_tasks)} tarefa(s) concluída(s) removida(s)")
 
     def load_tasks_to_table(self):
         """Carrega as tarefas na tabela com cores por status"""
-        # Limpar tabela
         for item in self.tree.get_children():
             self.tree.delete(item)
         
-        # Ordenar tarefas: pendentes primeiro, depois por data
+        # Ordenar tarefas
         pending_tasks = [t for t in self.tasks if t.get('status') == 'Pendente']
         completed_tasks = [t for t in self.tasks if t.get('status') == 'Concluída']
         
@@ -1297,7 +1220,6 @@ class TaskReminderApp:
             task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
             now = datetime.now()
             
-            # Preparar texto dos lembretes
             reminders = []
             if task.get('reminder_5min'):
                 reminders.append("5min")
@@ -1361,12 +1283,10 @@ class TaskReminderApp:
                 with open(self.tasks_file, 'r', encoding='utf-8') as f:
                     tasks = json.load(f)
                     
-                    # Atualizar estrutura se necessário
                     for task in tasks:
                         if 'is_overdue' not in task:
                             task_datetime = datetime.strptime(task['datetime'], "%Y-%m-%d %H:%M:%S")
                             task['is_overdue'] = task_datetime < datetime.now()
-                        # Garantir que os novos campos de lembrete existam
                         if 'reminder_30min' not in task:
                             task['reminder_30min'] = False
                         if 'reminder_1h' not in task:
@@ -1382,10 +1302,7 @@ class TaskReminderApp:
         return []
 
     def schedule_task_notifications(self, task):
-        """Agenda as notificações para uma tarefa - CORRIGIDO para datas futuras"""
-        if not SCHEDULE_AVAILABLE:
-            return
-            
+        """Agenda as notificações para uma tarefa"""
         try:
             if task.get('status') != 'Pendente':
                 return
@@ -1394,85 +1311,45 @@ class TaskReminderApp:
             now = datetime.now()
             
             if task_time > now:
-                # CORREÇÃO: Usar schedule.every() combinado com .at() para o horário específico
-                # Agendar para o dia e hora específicos
-                time_delta = task_time - now
-                
-                # Função para agendar notificação em um momento específico
-                def schedule_at_time(func, time_str):
-                    # Remove qualquer agendamento anterior para esta tarefa
-                    schedule.clear(f"task_{task['id']}")
-                    
-                    # Se for para hoje, usar schedule.every().day.at()
-                    if task_time.date() == now.date():
-                        schedule.every().day.at(time_str).do(func).tag(f"task_{task['id']}")
-                    else:
-                        # Para datas futuras, usar threading.Timer
-                        wait_seconds = (task_time - now).total_seconds()
-                        if wait_seconds > 0:
-                            timer = threading.Timer(wait_seconds, func)
-                            timer.daemon = True
-                            timer.start()
-                
-                # Função wrapper para notificação principal
                 def main_notification():
                     self.send_main_notification(task['id'], task['task'])
                 
-                # Agendar notificação principal
-                schedule_at_time(main_notification, task_time.strftime("%H:%M"))
+                wait_seconds = (task_time - now).total_seconds()
                 
-                # Função wrapper para notificação de lembrete
+                if wait_seconds > 0:
+                    timer = threading.Timer(wait_seconds, main_notification)
+                    timer.daemon = True
+                    timer.start()
+                    self.active_timers.append(timer)
+                
                 def create_reminder_notification(minutes):
                     def reminder():
                         self.send_reminder_notification(task['id'], task['task'], f"{minutes} minutos")
                     return reminder
                 
-                # Notificação 5 minutos antes
-                if task.get('reminder_5min'):
-                    reminder_time = task_time - timedelta(minutes=5)
-                    if reminder_time > now:
-                        wait_seconds = (reminder_time - now).total_seconds()
-                        if wait_seconds > 0:
-                            timer = threading.Timer(wait_seconds, create_reminder_notification(5))
-                            timer.daemon = True
-                            timer.start()
+                reminders = [
+                    (5, task.get('reminder_5min')),
+                    (10, task.get('reminder_10min')),
+                    (30, task.get('reminder_30min')),
+                    (60, task.get('reminder_1h'))
+                ]
                 
-                # Notificação 10 minutos antes
-                if task.get('reminder_10min'):
-                    reminder_time = task_time - timedelta(minutes=10)
-                    if reminder_time > now:
-                        wait_seconds = (reminder_time - now).total_seconds()
-                        if wait_seconds > 0:
-                            timer = threading.Timer(wait_seconds, create_reminder_notification(10))
-                            timer.daemon = True
-                            timer.start()
-                
-                # Notificação 30 minutos antes
-                if task.get('reminder_30min'):
-                    reminder_time = task_time - timedelta(minutes=30)
-                    if reminder_time > now:
-                        wait_seconds = (reminder_time - now).total_seconds()
-                        if wait_seconds > 0:
-                            timer = threading.Timer(wait_seconds, create_reminder_notification(30))
-                            timer.daemon = True
-                            timer.start()
-                
-                # Notificação 1 hora antes
-                if task.get('reminder_1h'):
-                    reminder_time = task_time - timedelta(hours=1)
-                    if reminder_time > now:
-                        wait_seconds = (reminder_time - now).total_seconds()
-                        if wait_seconds > 0:
-                            timer = threading.Timer(wait_seconds, create_reminder_notification(60))
-                            timer.daemon = True
-                            timer.start()
+                for minutes, enabled in reminders:
+                    if enabled:
+                        reminder_time = task_time - timedelta(minutes=minutes)
+                        if reminder_time > now:
+                            wait_seconds = (reminder_time - now).total_seconds()
+                            if wait_seconds > 0:
+                                timer = threading.Timer(wait_seconds, create_reminder_notification(minutes))
+                                timer.daemon = True
+                                timer.start()
+                                self.active_timers.append(timer)
                         
         except Exception as e:
-            print(f"Erro ao agendar notificações: {e}")
+            print(f"Erro ao agendar notificações para tarefa {task.get('id')}: {e}")
 
     def send_main_notification(self, task_id, task_text):
         """Envia notificação principal"""
-        # Enviar notificação do sistema (se disponível)
         if PLYER_AVAILABLE:
             try:
                 notification.notify(
@@ -1501,7 +1378,6 @@ class TaskReminderApp:
 
     def send_reminder_notification(self, task_id, task_text, minutes):
         """Envia notificação antecipada"""
-        # Enviar notificação do sistema (se disponível)
         if PLYER_AVAILABLE:
             try:
                 notification.notify(
@@ -1519,13 +1395,11 @@ class TaskReminderApp:
 
     def show_notification_window(self, task_text, reminder_text):
         """Mostra janela de notificação personalizada"""
-        # Criar e mostrar janela em thread separada para não bloquear
         def create_window():
             try:
                 notif_window = NotificationWindow(task_text, reminder_text)
                 self.notification_windows.append(notif_window)
                 notif_window.show()
-                # Remover da lista após fechar
                 if notif_window in self.notification_windows:
                     self.notification_windows.remove(notif_window)
             except Exception as e:
@@ -1536,11 +1410,16 @@ class TaskReminderApp:
 
     def reschedule_all_tasks(self):
         """Reagenda todas as notificações"""
-        if not SCHEDULE_AVAILABLE:
-            return
-            
-        schedule.clear()
-        # Limpar qualquer timer pendente
+        for timer in self.active_timers:
+            try:
+                timer.cancel()
+            except:
+                pass
+        self.active_timers.clear()
+        
+        if SCHEDULE_AVAILABLE:
+            schedule.clear()
+        
         for task in self.tasks:
             if task.get('status') == 'Pendente':
                 self.schedule_task_notifications(task)
@@ -1550,7 +1429,7 @@ class TaskReminderApp:
         check_interval = self.config.get("check_interval", 60)
         
         while self.scheduler_running:
-            time.sleep(check_interval)  # Verificar no intervalo configurado
+            time.sleep(check_interval)
             
             now = datetime.now()
             needs_update = False
@@ -1563,37 +1442,20 @@ class TaskReminderApp:
                         task['is_overdue'] = True
                         needs_update = True
             
-            # Atualizar interface se necessário
             if needs_update:
                 self.root.after(0, self.load_tasks_to_table)
 
-    def start_scheduler(self):
-        """Inicia o scheduler em thread separada"""
-        if not SCHEDULE_AVAILABLE:
-            return
-            
-        def run_scheduler():
-            while self.scheduler_running:
-                schedule.run_pending()
-                time.sleep(1)
-        
-        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-        scheduler_thread.start()
-
     # Métodos de configurações
     def save_all_settings(self):
-        """Salva todas as configurações (não mostra mensagem se estiver saindo)"""
-        # Atualizar config com valores atuais
+        """Salva todas as configurações"""
         config_updates = {
             'minimize_to_tray': self.minimize_to_tray_var.get(),
             'check_interval': self.check_interval_var.get(),
             'theme': self.theme_var.get()
         }
         
-        # Adicionar apenas se as variáveis existirem
         if hasattr(self, 'start_with_windows_var'):
             config_updates['start_with_windows'] = self.start_with_windows_var.get()
-            # Aplicar autostart se necessário
             if WINSHELL_AVAILABLE:
                 if config_updates['start_with_windows']:
                     self.setup_autostart()
@@ -1602,7 +1464,7 @@ class TaskReminderApp:
         
         if hasattr(self, 'show_tray_icon_var'):
             config_updates['show_tray_icon'] = self.show_tray_icon_var.get()
-            # Aplicar configuração do ícone da bandeja
+            # configuração do ícone da bandeja
             if PYSTRAY_AVAILABLE and PILLOW_AVAILABLE:
                 if self.tray_icon:
                     self.tray_icon.stop()
@@ -1634,7 +1496,6 @@ class TaskReminderApp:
         
         if hasattr(self, 'theme_var'):
             config_updates['theme'] = self.theme_var.get()
-            # Se o tema foi alterado, mostrar mensagem
             if config_updates['theme'] != self.config.get('theme', 'light'):
                 messagebox.showinfo("Tema", "O tema será aplicado na próxima inicialização do aplicativo.")
         
@@ -1642,7 +1503,6 @@ class TaskReminderApp:
         
         # Salvar no arquivo
         if self.save_config():
-            # Só mostra mensagem se não estiver saindo
             if not self.is_quitting:
                 messagebox.showinfo("Sucesso", "Configurações salvas com sucesso!")
                 self.status_var.set("✅ Configurações salvas")
@@ -1687,18 +1547,15 @@ class TaskReminderApp:
                 self.theme_var.set("light")
             
             # Aplicar mudanças imediatamente para restaurar padrões
-            # Reconfigurar autostart
             if WINSHELL_AVAILABLE:
                 self.setup_autostart()
             
-            # Reconfigurar ícone da bandeja
             if self.tray_icon:
                 self.tray_icon.stop()
                 self.tray_icon = None
             if PYSTRAY_AVAILABLE and PILLOW_AVAILABLE:
                 self.setup_tray_icon()
             
-            # Salvar configurações
             self.save_config(default_config)
             
             messagebox.showinfo("Sucesso", "Configurações padrão restauradas!")
@@ -1722,12 +1579,15 @@ class TaskReminderApp:
                 # Restaurar configurações padrão
                 self.restore_default_settings()
                 
-                # Remover autostart se disponível
+                # Remover autostart
                 if WINSHELL_AVAILABLE:
                     self.remove_autostart()
                 
                 # Atualizar interface
                 self.load_tasks_to_table()
+                
+                # Cancelar todos os timers
+                self.reschedule_all_tasks()
                 
                 messagebox.showinfo("Sucesso", "Todos os dados foram limpos com sucesso!")
                 self.status_var.set("🧹 Todos os dados foram limpos")
@@ -1737,41 +1597,43 @@ class TaskReminderApp:
 
     def open_settings(self):
         """Abre a janela de configurações"""
-        self.notebook.select(1)  # Seleciona a aba de configurações
+        self.notebook.select(1)
         self.show_window()
 
     def quit_app_silent(self):
-        """Encerra o aplicativo silenciosamente (sem mensagens)"""
-        self.is_quitting = True  # Marcar que está saindo
+        """Encerra o aplicativo silenciosamente"""
+        self.is_quitting = True
         self.quit_app()
 
     def quit_app(self):
         """Encerra o aplicativo corretamente"""
         self.scheduler_running = False
         
-        # Fechar todas as janelas de notificação
+        for timer in self.active_timers:
+            try:
+                timer.cancel()
+            except:
+                pass
+        
         for window in self.notification_windows[:]:
             try:
                 window.window.destroy()
             except:
                 pass
         
-        # Salvar tudo antes de sair (silenciosamente)
+        # Salvar tudo antes de sair
         try:
             self.save_tasks()
-            # Salvar configurações sem mostrar mensagem
             self.save_config()
         except:
             pass
         
-        # Parar ícone da bandeja
         if self.tray_icon:
             try:
                 self.tray_icon.stop()
             except:
                 pass
         
-        # Fechar janela
         try:
             self.root.quit()
             self.root.destroy()
@@ -1781,8 +1643,7 @@ class TaskReminderApp:
         sys.exit(0)
 
 def main():
-    """Função principal - oculta o console e inicia o aplicativo"""
-    # Verificar se já existe uma instância em execução
+    """Função principal"""
     import ctypes
     mutex_name = "Global\\TaskReminderApp"
     mutex = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
@@ -1813,11 +1674,9 @@ def main():
         except:
             pass
     finally:
-        # Liberar mutex
         ctypes.windll.kernel32.CloseHandle(mutex)
 
 if __name__ == "__main__":
-    # Verificar argumentos de linha de comando
     start_minimized = "--minimized" in sys.argv
     
     # Iniciar aplicação
