@@ -50,103 +50,136 @@ except ImportError:
     print("tkcalendar não está instalado. Use: pip install tkcalendar")
 
 class NotificationWindow:
-    """Janela de notificação"""
+    """Janela de notificação responsiva"""
     def __init__(self, task_text, reminder_text=None):
         self.window = tk.Tk()
         self.window.title("Task Reminder - Notificação")
         self.window.configure(bg='#2c3e50')
         
-        # Configurações
+        # Configurações iniciais
         self.window.attributes('-topmost', True)
-        self.window.resizable(False, False)
+        self.window.resizable(True, True)  # Permitir redimensionamento
+        self.window.minsize(350, 150)  # Tamanho mínimo
         
+        # Configurar fechamento
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
         
-        # Frame principal
+        # Frame principal com padding
         main_frame = tk.Frame(self.window, bg='#2c3e50', padx=20, pady=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Ícone e título
-        icon_frame = tk.Frame(main_frame, bg='#2c3e50')
-        icon_frame.pack(fill=tk.X, pady=(0, 10))
+        # Configurar grid do frame principal para expandir
+        main_frame.grid_rowconfigure(2, weight=1)  # Linha da mensagem expande
+        main_frame.grid_columnconfigure(0, weight=1)
         
+        # Ícone e título (linha 0)
+        icon_frame = tk.Frame(main_frame, bg='#2c3e50')
+        icon_frame.grid(row=0, column=0, sticky='ew', pady=(0, 10))
+        icon_frame.grid_columnconfigure(1, weight=1)  # Título expande
+        
+        # Ícone
         icon_label = tk.Label(icon_frame, text="⏰", font=('Arial', 24), 
                             bg='#2c3e50', fg='#f39c12')
-        icon_label.pack(side=tk.LEFT)
+        icon_label.grid(row=0, column=0, padx=(0, 10))
         
+        # Título
         title_text = "Lembrete de Tarefa" if reminder_text else "Tarefa Agora!"
         title_label = tk.Label(icon_frame, text=title_text, 
                              font=('Arial', 16, 'bold'), 
                              bg='#2c3e50', fg='white')
-        title_label.pack(side=tk.LEFT, padx=(10, 0))
+        title_label.grid(row=0, column=1, sticky='w')
         
-        # Texto da notificação
+        # Texto da notificação (linha 1)
         if reminder_text:
             message = f"{reminder_text}\n\n{task_text}"
         else:
             message = f"É hora de realizar a tarefa:\n\n{task_text}"
         
-        # Label do texto
-        message_label = tk.Label(main_frame, text=message, 
+        # Frame para o texto com scrollbar (opcional para textos muito longos)
+        text_frame = tk.Frame(main_frame, bg='#2c3e50')
+        text_frame.grid(row=1, column=0, sticky='nsew', pady=(0, 20))
+        text_frame.grid_rowconfigure(0, weight=1)
+        text_frame.grid_columnconfigure(0, weight=1)
+        
+        # Label do texto com wrap
+        message_label = tk.Label(text_frame, text=message, 
                                font=('Arial', 12), 
                                bg='#2c3e50', fg='#ecf0f1',
-                               justify=tk.LEFT)
-        message_label.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+                               justify=tk.LEFT, wraplength=500)  # Wrap maior
+        message_label.grid(row=0, column=0, sticky='nw')
         
+        # Forçar atualização para calcular tamanho necessário
         self.window.update_idletasks()
         
-        # Calcular largura necessária
-        text_width = message_label.winfo_reqwidth()
+        # Calcular tamanho ideal baseado no conteúdo
+        message_label.update_idletasks()
         
-        # Definir largura base
-        window_width = min(800, max(350, text_width + 80))
+        # Largura ideal (mínimo 350, máximo 600)
+        text_width = min(600, max(350, message_label.winfo_reqwidth() + 40))
         
-        # Configurar wrap com base na largura calculada
-        message_label.config(wraplength=window_width - 80)
-        
-        self.window.update_idletasks()
-        
-        # Obter altura necessária
+        # Altura ideal baseada no texto
         text_height = message_label.winfo_reqheight()
         
-        # Calcular altura total
+        # Calcular altura total da janela
         title_height = icon_frame.winfo_reqheight()
-        button_height = 50
-        total_height = title_height + text_height + button_height + 60
+        button_height = 50  # Altura aproximada do botão
+        total_height = title_height + text_height + button_height + 80  # Padding total
         
-        # Definir geometria final
-        self.window.geometry(f"{window_width}x{total_height}")
+        # Limitar altura máxima (80% da tela)
+        max_height = int(self.window.winfo_screenheight() * 0.8)
+        final_height = min(max_height, total_height)
         
-        # Botão OK
-        button_frame = tk.Frame(main_frame, bg='#2c3e50')
-        button_frame.pack(fill=tk.X)
+        # Definir geometria
+        self.window.geometry(f"{text_width}x{final_height}")
+        
+        # Centralizar na tela
+        self.center_window()
+        
+        # Botão OK (linha 2)
+        button_frame = tk.Frame(main_frame, bg='#2c3e50', height=50)
+        button_frame.grid(row=2, column=0, sticky='ew')
+        button_frame.grid_columnconfigure(0, weight=1)
+        button_frame.grid_propagate(False)  # Manter altura fixa do frame do botão
         
         ok_button = tk.Button(button_frame, text="OK", 
                             font=('Arial', 12, 'bold'),
                             bg='#3498db', fg='white',
-                            padx=30, pady=10,
+                            padx=30, pady=8,
                             command=self.on_close,
-                            cursor='hand2')
-        ok_button.pack()
+                            cursor='hand2',
+                            relief='flat')
+        ok_button.grid(row=0, column=0)
         
+        # Estilo do botão
         ok_button.configure(activebackground='#2980b9', activeforeground='white')
         
-        # Centralizar
-        self.center_window()
-        
-        # Focar no botão
+        # Bind de eventos
         ok_button.focus_set()
         self.window.bind('<Return>', lambda e: self.on_close())
+        self.window.bind('<Configure>', self.on_window_resize)  # Para ajustar wrap
+        
+        # Guardar referências
+        self.message_label = message_label
+        self.text_frame = text_frame
+        self.ok_button = ok_button
         
     def center_window(self):
-        """Centraliza a janela"""
+        """Centraliza a janela na tela"""
         self.window.update_idletasks()
         width = self.window.winfo_width()
         height = self.window.winfo_height()
         x = (self.window.winfo_screenwidth() // 2) - (width // 2)
         y = (self.window.winfo_screenheight() // 2) - (height // 2)
-        self.window.geometry(f'+{x}+{y}')
-        
+        self.window.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def on_window_resize(self, event):
+        """Ajusta o wrap do texto quando a janela é redimensionada"""
+        if event.widget == self.window:
+            # Ajustar wrap com base na largura atual
+            new_width = self.window.winfo_width() - 80  # Subtrair padding
+            if new_width > 100:
+                self.message_label.config(wraplength=new_width)
+    
     def on_close(self):
         self.window.destroy()
         
