@@ -5,7 +5,7 @@
 
 [Setup]
 AppName=Task Reminder
-AppVersion=2025.12.02.0914
+AppVersion=2026.02.18.1049
 DefaultDirName=C:\Task Reminder
 DefaultGroupName=Task Reminder
 OutputDir=.
