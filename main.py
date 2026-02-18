@@ -54,16 +54,12 @@ class NotificationWindow:
     def __init__(self, task_text, reminder_text=None):
         self.window = tk.Tk()
         self.window.title("Task Reminder - Notificação")
-        self.window.geometry("400x200")
         self.window.configure(bg='#2c3e50')
         
-        # Tornar a janela sempre no topo
+        # Configurações
         self.window.attributes('-topmost', True)
-        
-        # Impedir redimensionamento
         self.window.resizable(False, False)
         
-        # Configurar fechamento
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
         
         # Frame principal
@@ -74,7 +70,6 @@ class NotificationWindow:
         icon_frame = tk.Frame(main_frame, bg='#2c3e50')
         icon_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Ícone
         icon_label = tk.Label(icon_frame, text="⏰", font=('Arial', 24), 
                             bg='#2c3e50', fg='#f39c12')
         icon_label.pack(side=tk.LEFT)
@@ -91,11 +86,36 @@ class NotificationWindow:
         else:
             message = f"É hora de realizar a tarefa:\n\n{task_text}"
         
+        # Label do texto
         message_label = tk.Label(main_frame, text=message, 
                                font=('Arial', 12), 
                                bg='#2c3e50', fg='#ecf0f1',
-                               justify=tk.LEFT, wraplength=350)
+                               justify=tk.LEFT)
         message_label.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        
+        self.window.update_idletasks()
+        
+        # Calcular largura necessária
+        text_width = message_label.winfo_reqwidth()
+        
+        # Definir largura base
+        window_width = min(800, max(350, text_width + 80))
+        
+        # Configurar wrap com base na largura calculada
+        message_label.config(wraplength=window_width - 80)
+        
+        self.window.update_idletasks()
+        
+        # Obter altura necessária
+        text_height = message_label.winfo_reqheight()
+        
+        # Calcular altura total
+        title_height = icon_frame.winfo_reqheight()
+        button_height = 50
+        total_height = title_height + text_height + button_height + 60
+        
+        # Definir geometria final
+        self.window.geometry(f"{window_width}x{total_height}")
         
         # Botão OK
         button_frame = tk.Frame(main_frame, bg='#2c3e50')
@@ -109,12 +129,23 @@ class NotificationWindow:
                             cursor='hand2')
         ok_button.pack()
         
-        # Configurar estilo do botão
         ok_button.configure(activebackground='#2980b9', activeforeground='white')
         
-        # Focar no botão OK
+        # Centralizar
+        self.center_window()
+        
+        # Focar no botão
         ok_button.focus_set()
         self.window.bind('<Return>', lambda e: self.on_close())
+        
+    def center_window(self):
+        """Centraliza a janela"""
+        self.window.update_idletasks()
+        width = self.window.winfo_width()
+        height = self.window.winfo_height()
+        x = (self.window.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.window.winfo_screenheight() // 2) - (height // 2)
+        self.window.geometry(f'+{x}+{y}')
         
     def on_close(self):
         self.window.destroy()
